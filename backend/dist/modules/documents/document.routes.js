@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.documentRoutes = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const upload_middleware_1 = require("../../middlewares/upload.middleware");
+const document_controller_1 = require("./document.controller");
+exports.documentRoutes = (0, express_1.Router)();
+exports.documentRoutes.use(auth_middleware_1.requireAuth);
+exports.documentRoutes.get('/', document_controller_1.listDocuments);
+exports.documentRoutes.get('/stats', document_controller_1.getStats);
+exports.documentRoutes.post('/', upload_middleware_1.uploadPdf, document_controller_1.createDocument);
+exports.documentRoutes.get('/:id', document_controller_1.getDocument);
+exports.documentRoutes.get('/:id/audit', document_controller_1.getAudit);
+exports.documentRoutes.get('/:id/certificate', document_controller_1.getCertificate);
+exports.documentRoutes.post('/:id/send', document_controller_1.sendDocument);

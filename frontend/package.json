@@ -1,0 +1,50 @@
+{
+  "name": "esigning-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+<<<<<<< HEAD
+    "typecheck": "tsc --noEmit"
+=======
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+>>>>>>> e054afa1 (Save 1)
+  },
+  "dependencies": {
+    "@heroicons/vue": "^2.2.0",
+    "apexcharts": "^5.3.6",
+    "axios": "^1.13.2",
+    "clsx": "^2.1.1",
+    "chart.js": "^4.4.9",
+    "dayjs": "^1.11.19",
+    "firebase": "^11.0.2",
+    "lucide-vue-next": "^0.562.0",
+    "pinia": "^3.0.4",
+<<<<<<< HEAD
+=======
+    "pdfjs-dist": "^4.10.38",
+    "socket.io-client": "^4.8.1",
+>>>>>>> e054afa1 (Save 1)
+    "vee-validate": "^4.15.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5",
+    "vue3-apexcharts": "^1.10.0",
+    "yup": "^1.7.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+<<<<<<< HEAD
+    "vite": "^6.0.6"
+=======
+    "vite": "^6.0.6",
+    "vitest": "^2.1.9"
+>>>>>>> e054afa1 (Save 1)
+  }
+}

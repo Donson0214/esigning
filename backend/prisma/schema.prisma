@@ -1,0 +1,422 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SENDER
+}
+
+enum DocumentStatus {
+  DRAFT
+  SENT
+  VIEWED
+<<<<<<< HEAD
+  SIGNED
+  COMPLETED
+=======
+  IN_PROGRESS
+  SIGNED
+  COMPLETED
+  DECLINED
+  EXPIRED
+>>>>>>> e054afa1 (Save 1)
+}
+
+enum SignerStatus {
+  PENDING
+  VIEWED
+  SIGNED
+<<<<<<< HEAD
+=======
+  DECLINED
+>>>>>>> e054afa1 (Save 1)
+}
+
+enum FieldType {
+  SIGNATURE
+  DATE
+<<<<<<< HEAD
+=======
+  INITIAL
+  FULL_NAME
+  EMAIL
+  TEXT
+  CHECKBOX
+  DROPDOWN
+  RADIO
+  COMPANY
+  JOB_TITLE
+  IMAGE
+  ATTACHMENT
+}
+
+enum FieldStatus {
+  EMPTY
+  FILLED
+  SIGNED
+>>>>>>> e054afa1 (Save 1)
+}
+
+enum AuditEventType {
+  DOCUMENT_UPLOADED
+  DOCUMENT_SENT
+  DOCUMENT_VIEWED
+  DOCUMENT_SIGNED
+  DOCUMENT_COMPLETED
+<<<<<<< HEAD
+=======
+  DOCUMENT_HASH_COMPUTED
+  DOCUMENT_DECLINED
+  DOCUMENT_EXPIRED
+  ACCESS_GRANTED
+  ACCESS_REVOKED
+  FIELD_UPDATED
+  SIGNING_SESSION_CREATED
+  MANIFEST_SUBMITTED
+  SIGNATURE_CAPTURED
+  SIGNATURE_APPLIED
+  SIGNATURE_REJECTED
+>>>>>>> e054afa1 (Save 1)
+}
+
+enum AuditActorType {
+  SENDER
+  SIGNER
+  SYSTEM
+}
+
+<<<<<<< HEAD
+=======
+enum SigningSessionStatus {
+  ACTIVE
+  FINALIZED
+  VOID
+  EXPIRED
+}
+
+enum SignatureArtifactType {
+  DRAWN
+  TYPED
+  UPLOADED
+}
+
+enum NotificationChannel {
+  REALTIME
+  IN_APP
+  EMAIL
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+>>>>>>> e054afa1 (Save 1)
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  name      String?
+<<<<<<< HEAD
+=======
+  jobTitle  String?
+  photoUrl  String?
+>>>>>>> e054afa1 (Save 1)
+  role      UserRole  @default(SENDER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  documents Document[]
+  auditEvents AuditEvent[]
+<<<<<<< HEAD
+=======
+  notifications Notification[]
+  notificationPreference NotificationPreference?
+>>>>>>> e054afa1 (Save 1)
+}
+
+model Document {
+  id           String          @id @default(uuid())
+  ownerId      String
+  owner        User            @relation(fields: [ownerId], references: [id])
+  title        String
+  fileUrl      String
+  filePublicId String
+  fileName     String
+  fileMimeType String
+  fileSize     Int
+<<<<<<< HEAD
+  hash         String
+=======
+  signedFileUrl      String?
+  signedFilePublicId String?
+  hash         String
+  hashAlgorithm String?
+  hashComputedAt DateTime?
+  postHash      String?
+  postHashAlgorithm String?
+  postHashComputedAt DateTime?
+  postHashVersion   Int            @default(0)
+>>>>>>> e054afa1 (Save 1)
+  status       DocumentStatus  @default(DRAFT)
+  sentAt       DateTime?
+  viewedAt     DateTime?
+  signedAt     DateTime?
+  completedAt  DateTime?
+<<<<<<< HEAD
+=======
+  declinedAt   DateTime?
+  expiredAt    DateTime?
+  lockedAt     DateTime?
+  fieldVersion Int            @default(1)
+  version      Int            @default(1)
+  serverAttestation String?
+  serverAttestationAlgorithm String?
+>>>>>>> e054afa1 (Save 1)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  signers      Signer[]
+  fields       SignatureField[]
+  signatures   Signature[]
+  auditEvents  AuditEvent[]
+  certificate  Certificate?
+<<<<<<< HEAD
+=======
+  signingSessions SigningSession[]
+  events       DocumentEvent[]
+>>>>>>> e054afa1 (Save 1)
+
+  @@index([ownerId])
+}
+
+model Signer {
+  id                   String       @id @default(uuid())
+  documentId           String
+  document             Document     @relation(fields: [documentId], references: [id])
+  name                 String?
+  email                String
+  status               SignerStatus  @default(PENDING)
+  signOrder            Int           @default(1)
+  signingTokenHash     String
+  signingTokenExpiresAt DateTime?
+  viewedAt             DateTime?
+  signedAt             DateTime?
+<<<<<<< HEAD
+=======
+  declinedAt           DateTime?
+  declineReason        String?
+>>>>>>> e054afa1 (Save 1)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  fields               SignatureField[]
+  signatures           Signature[]
+  auditEvents          AuditEvent[]
+<<<<<<< HEAD
+=======
+  signingSessions      SigningSession[]
+>>>>>>> e054afa1 (Save 1)
+
+  @@index([documentId])
+  @@index([email])
+  @@unique([documentId, email])
+}
+
+model SignatureField {
+  id         String     @id @default(uuid())
+  documentId String
+  document   Document   @relation(fields: [documentId], references: [id])
+<<<<<<< HEAD
+  signerId   String
+  signer     Signer     @relation(fields: [signerId], references: [id])
+  type       FieldType
+=======
+  signerId   String?
+  signer     Signer?    @relation(fields: [signerId], references: [id])
+  signerEmail String?
+  type       FieldType
+  label      String?
+  placeholder String?
+  required   Boolean   @default(true)
+  value      String?
+  status     FieldStatus @default(EMPTY)
+  options    Json?
+>>>>>>> e054afa1 (Save 1)
+  page       Int
+  x          Float
+  y          Float
+  width      Float
+  height     Float
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  signatures Signature[]
+
+  @@index([documentId])
+  @@index([signerId])
+<<<<<<< HEAD
+=======
+  @@index([signerEmail])
+>>>>>>> e054afa1 (Save 1)
+}
+
+model Signature {
+  id         String         @id @default(uuid())
+  documentId String
+  document   Document       @relation(fields: [documentId], references: [id])
+  signerId   String
+  signer     Signer         @relation(fields: [signerId], references: [id])
+  fieldId    String
+  field      SignatureField @relation(fields: [fieldId], references: [id])
+  value      String
+<<<<<<< HEAD
+=======
+  signingSessionId String?
+  signingSession   SigningSession? @relation(fields: [signingSessionId], references: [id])
+  manifestHash     String?
+  artifactHash     String?
+  artifactType     SignatureArtifactType?
+>>>>>>> e054afa1 (Save 1)
+  signedAt   DateTime       @default(now())
+  createdAt  DateTime       @default(now())
+
+  @@unique([fieldId])
+  @@index([documentId])
+  @@index([signerId])
+}
+
+model AuditEvent {
+  id            String         @id @default(uuid())
+  documentId    String
+  document      Document       @relation(fields: [documentId], references: [id])
+  actorType     AuditActorType
+  actorUserId   String?
+  actorUser     User?          @relation(fields: [actorUserId], references: [id])
+  actorSignerId String?
+  actorSigner   Signer?        @relation(fields: [actorSignerId], references: [id])
+  eventType     AuditEventType
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+
+  @@index([documentId])
+  @@index([actorUserId])
+  @@index([actorSignerId])
+}
+
+model Certificate {
+  id         String   @id @default(uuid())
+  documentId String   @unique
+  document   Document @relation(fields: [documentId], references: [id])
+  url        String
+  publicId   String
+  hash       String
+  summary    Json
+  issuedAt   DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+<<<<<<< HEAD
+=======
+
+model SigningSession {
+  id                      String                @id @default(uuid())
+  documentId              String
+  document                Document              @relation(fields: [documentId], references: [id])
+  signerId                String
+  signer                  Signer                @relation(fields: [signerId], references: [id])
+  status                  SigningSessionStatus  @default(ACTIVE)
+  fieldVersion            Int                   @default(1)
+  preHash                 String
+  preHashAlgorithm        String
+  preHashComputedAt       DateTime
+  manifestJson            Json?
+  manifestHash            String?
+  manifestAlgorithm       String?
+  manifestCreatedAt       DateTime?
+  signedManifestHash      String?
+  signatureArtifactType   SignatureArtifactType?
+  signatureArtifactHash   String?
+  signatureArtifactAlgorithm String?
+  signatureArtifactUrl    String?
+  correlationId           String?
+  clientMutationId        String?
+  serverAttestation       String?
+  serverAttestationAlgorithm String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  expiresAt               DateTime?
+  signatures              Signature[]
+
+  @@index([documentId])
+  @@index([signerId])
+}
+
+model DocumentEvent {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id])
+  orgId      String
+  event      String
+  version    String
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  @@index([documentId, createdAt])
+  @@index([orgId, createdAt])
+}
+
+model Notification {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  orgId           String
+  docId           String?
+  eventType       String
+  title           String
+  message         String
+  link            String?
+  payload         Json?
+  actorUserId     String?
+  actorEmail      String?
+  actorRole       String?
+  isRead          Boolean  @default(false)
+  idempotencyKey  String?  @unique
+  createdAt       DateTime @default(now())
+  deliveries      NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@index([orgId, createdAt])
+}
+
+model NotificationPreference {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+  emailEnabled   Boolean  @default(true)
+  realtimeEnabled Boolean @default(true)
+  inAppEnabled   Boolean  @default(true)
+  eventOverrides Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model NotificationDelivery {
+  id             String                    @id @default(uuid())
+  notificationId String
+  notification   Notification             @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel        NotificationChannel
+  status         NotificationDeliveryStatus @default(PENDING)
+  attempts       Int                       @default(0)
+  lastError      String?
+  deliveredAt    DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@unique([notificationId, channel])
+  @@index([channel, status])
+}
+>>>>>>> e054afa1 (Save 1)
