@@ -15,10 +15,7 @@ export async function viewSigningSession(req: Request, res: Response, next: Next
     const session = await signingService.viewSigningSession(token, {
       ipAddress: req.ip,
       userAgent: req.get('user-agent') ?? undefined,
-<<<<<<< HEAD
-=======
       correlationId: req.correlationId,
->>>>>>> e054afa1 (Save 1)
     });
     res.json(session);
   } catch (err) {
@@ -36,10 +33,7 @@ export async function submitSigning(req: Request, res: Response, next: NextFunct
     const result = await signingService.submitSigning(token, payload, {
       ipAddress: req.ip,
       userAgent: req.get('user-agent') ?? undefined,
-<<<<<<< HEAD
-=======
       correlationId: req.correlationId,
->>>>>>> e054afa1 (Save 1)
     });
     res.json(result);
   } catch (err) {

@@ -1,12 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
-<<<<<<< HEAD
-import { getUserById } from './user.service';
-import { createHttpError } from '../../utils/http-error.util';
-=======
 import { getUserById, updateUser } from './user.service';
 import { createHttpError } from '../../utils/http-error.util';
 import { updateUserSchema } from './user.types';
->>>>>>> e054afa1 (Save 1)
 
 export async function me(req: Request, res: Response, next: NextFunction) {
   try {
@@ -19,8 +14,6 @@ export async function me(req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
-<<<<<<< HEAD
-=======
 
 export async function updateMe(req: Request, res: Response, next: NextFunction) {
   try {
@@ -31,4 +24,3 @@ export async function updateMe(req: Request, res: Response, next: NextFunction) 
     next(err);
   }
 }
->>>>>>> e054afa1 (Save 1)

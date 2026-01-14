@@ -3,10 +3,7 @@
     <Sidebar :collapsed="sidebarCollapsed" :mobile-open="mobileOpen" @toggle="toggleCollapsed" @close="mobileOpen = false" />
     <div class="app-main">
       <Topbar :title="pageTitle" @toggle-mobile="mobileOpen = true" />
-<<<<<<< HEAD
-=======
       <ToastStack />
->>>>>>> e054afa1 (Save 1)
       <main class="app-content">
         <RouterView />
       </main>
@@ -15,12 +12,6 @@
 </template>
 
 <script setup lang="ts">
-<<<<<<< HEAD
-import { ref } from 'vue';
-import { RouterView } from 'vue-router';
-import Sidebar from '@/shared/components/Sidebar.vue';
-import Topbar from '@/shared/components/Topbar.vue';
-=======
 import { onMounted, ref } from 'vue';
 import { RouterView } from 'vue-router';
 import Sidebar from '@/shared/components/Sidebar.vue';
@@ -28,7 +19,6 @@ import Topbar from '@/shared/components/Topbar.vue';
 import ToastStack from '@/shared/components/ToastStack.vue';
 import { useAuthProfile } from '@/features/auth/useAuthProfile';
 import { useNotifications } from '@/features/notifications/useNotifications';
->>>>>>> e054afa1 (Save 1)
 
 const sidebarCollapsed = ref(false);
 const mobileOpen = ref(false);
@@ -38,8 +28,6 @@ const toggleCollapsed = () => {
 };
 
 const pageTitle = 'Wilson Platform';
-<<<<<<< HEAD
-=======
 
 const { refresh } = useAuthProfile();
 const { initNotifications } = useNotifications();
@@ -48,7 +36,6 @@ onMounted(() => {
   void refresh();
   void initNotifications();
 });
->>>>>>> e054afa1 (Save 1)
 </script>
 
 <style scoped>

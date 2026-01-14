@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2021",
-<<<<<<< HEAD
-    "lib": ["ES2021"],
-=======
     "lib": ["ES2021", "DOM"],
->>>>>>> e054afa1 (Save 1)
     "module": "CommonJS",
     "moduleResolution": "Node",
     "rootDir": "src",

@@ -1,41 +1,4 @@
 import { computed, ref } from 'vue';
-<<<<<<< HEAD
-import { onAuthStateChanged, updateProfile, type User } from 'firebase/auth';
-import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getFirebase, hasFirebaseConfig } from '@/shared/lib/firebase';
-
-type ProfileData = {
-  name?: string | null;
-  email?: string | null;
-  organization?: string | null;
-  jobTitle?: string | null;
-  role?: string | null;
-};
-
-const authUser = ref<User | null>(null);
-const authDisplayName = ref('');
-const authEmail = ref('');
-const profile = ref<ProfileData | null>(null);
-const loading = ref(true);
-
-let authUnsub: (() => void) | null = null;
-let profileUnsub: (() => void) | null = null;
-let initialized = false;
-
-const safeTrim = (value?: string | null) => (value ?? '').trim();
-
-const deriveName = (user: User | null, data: ProfileData | null, fallbackName: string) => {
-  const fromProfile = safeTrim(data?.name);
-  if (fromProfile) return fromProfile;
-  const fromAuth = safeTrim(user?.displayName ?? null) || safeTrim(fallbackName);
-  if (fromAuth) return fromAuth;
-  const mail = safeTrim(data?.email || user?.email || null);
-  return mail ? mail.split('@')[0] : 'Guest';
-};
-
-const deriveEmail = (user: User | null, data: ProfileData | null, fallbackEmail: string) =>
-  safeTrim(user?.email || data?.email || fallbackEmail || null);
-=======
 import { apiClient } from '@/shared/lib/axios';
 
 type ProfileData = {
@@ -69,7 +32,6 @@ const deriveName = (data: ProfileData | null) => {
   const mail = safeTrim(data?.email);
   return mail ? mail.split('@')[0] : 'Guest';
 };
->>>>>>> e054afa1 (Save 1)
 
 const deriveInitials = (name: string) => {
   const parts = name.split(' ').filter(Boolean);
@@ -78,94 +40,6 @@ const deriveInitials = (name: string) => {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 };
 
-<<<<<<< HEAD
-const ensureInit = () => {
-  if (initialized) return;
-  initialized = true;
-  if (!hasFirebaseConfig()) {
-    loading.value = false;
-    return;
-  }
-  const { auth, db } = getFirebase();
-  authUnsub = onAuthStateChanged(auth, (user) => {
-    authUser.value = user;
-    authDisplayName.value = user?.displayName ?? '';
-    authEmail.value = user?.email ?? '';
-    loading.value = false;
-    if (profileUnsub) {
-      profileUnsub();
-      profileUnsub = null;
-    }
-    if (user) {
-      const ref = doc(db, 'users', user.uid);
-      profileUnsub = onSnapshot(
-        ref,
-        (snap) => {
-          profile.value = snap.exists() ? (snap.data() as ProfileData) : null;
-        },
-        () => {
-          profile.value = null;
-        },
-      );
-    } else {
-      profile.value = null;
-    }
-  });
-};
-
-export const useAuthProfile = () => {
-  ensureInit();
-
-  const displayName = computed(() =>
-    deriveName(authUser.value, profile.value, authDisplayName.value),
-  );
-  const email = computed(() => deriveEmail(authUser.value, profile.value, authEmail.value));
-  const initials = computed(() => deriveInitials(displayName.value));
-  const organization = computed(() =>
-    authUser.value ? safeTrim(profile.value?.organization) || 'No organization' : 'No organization',
-  );
-  const jobTitle = computed(() => safeTrim(profile.value?.jobTitle) || 'N/A');
-  const role = computed(() =>
-    authUser.value ? safeTrim(profile.value?.role) || 'Admin' : 'Guest',
-  );
-
-  const updateProfileDetails = async (payload: {
-    name?: string;
-    jobTitle?: string;
-    organization?: string;
-    role?: string;
-  }) => {
-    if (!hasFirebaseConfig()) {
-      throw new Error('Firebase is not configured.');
-    }
-    const { auth, db } = getFirebase();
-    const current = auth.currentUser;
-    if (!current) {
-      throw new Error('No authenticated user.');
-    }
-    const trimmedName = payload.name?.trim();
-    if (trimmedName && trimmedName !== current.displayName) {
-      await updateProfile(current, { displayName: trimmedName });
-      authDisplayName.value = trimmedName;
-    }
-    await setDoc(
-      doc(db, 'users', current.uid),
-      {
-        name: trimmedName ?? null,
-        email: current.email ?? null,
-        jobTitle: payload.jobTitle?.trim() || null,
-        organization: payload.organization?.trim() || null,
-        role: payload.role?.trim() || null,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  };
-
-  return {
-    user: authUser,
-    profile,
-=======
 const fetchProfile = async () => {
   const token = localStorage.getItem('auth_token');
   if (!token) {
@@ -235,39 +109,23 @@ export const useAuthProfile = () => {
   return {
     user,
     profile: user,
->>>>>>> e054afa1 (Save 1)
     loading,
     displayName,
     email,
     initials,
-<<<<<<< HEAD
-=======
     avatarUrl,
->>>>>>> e054afa1 (Save 1)
     organization,
     jobTitle,
     role,
     updateProfileDetails,
-<<<<<<< HEAD
-=======
     refresh: fetchProfile,
->>>>>>> e054afa1 (Save 1)
   };
 };
 
 export const stopAuthProfile = () => {
-<<<<<<< HEAD
-  authUnsub?.();
-  profileUnsub?.();
-  authUnsub = null;
-  profileUnsub = null;
-  initialized = false;
-  loading.value = false;
-=======
   user.value = null;
   loading.value = false;
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('auth_user');
   }
->>>>>>> e054afa1 (Save 1)
 };

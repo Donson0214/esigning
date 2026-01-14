@@ -10,13 +10,6 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: requireEnv('DATABASE_URL'),
-<<<<<<< HEAD
-  corsOrigin: process.env.CORS_ORIGIN ?? '*',
-  jwtSecret: requireEnv('JWT_SECRET'),
-  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
-  signingAppUrl: process.env.SIGNING_APP_URL ?? 'http://localhost:5173/sign',
-  signingLinkTtlMinutes: Number(process.env.SIGNING_LINK_TTL_MINUTES ?? 60 * 24),
-=======
   corsOrigins: (process.env.CORS_ORIGIN ?? '*')
     .split(',')
     .map((value) => value.trim())
@@ -39,7 +32,6 @@ export const env = {
   realtime: {
     eventLimit: Number(process.env.REALTIME_EVENT_LIMIT ?? 50),
   },
->>>>>>> e054afa1 (Save 1)
   cloudinary: {
     cloudName: requireEnv('CLOUDINARY_CLOUD_NAME'),
     apiKey: requireEnv('CLOUDINARY_API_KEY'),

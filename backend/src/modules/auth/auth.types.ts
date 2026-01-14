@@ -11,10 +11,6 @@ export const loginSchema = z.object({
   password: z.string().min(8),
 });
 
-<<<<<<< HEAD
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
-=======
 export const firebaseAuthSchema = z.object({
   idToken: z.string().min(1),
   name: z.string().min(1).optional(),
@@ -23,4 +19,3 @@ export const firebaseAuthSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type FirebaseAuthInput = z.infer<typeof firebaseAuthSchema>;
->>>>>>> e054afa1 (Save 1)

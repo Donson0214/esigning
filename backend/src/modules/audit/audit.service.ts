@@ -22,8 +22,6 @@ export async function listAuditEvents(documentId: string) {
     orderBy: { createdAt: 'asc' },
   });
 }
-<<<<<<< HEAD
-=======
 
 export async function listAuditEventsForOwner(params: {
   ownerId: string;
@@ -51,4 +49,3 @@ export async function listAuditEventsForOwner(params: {
     },
   });
 }
->>>>>>> e054afa1 (Save 1)

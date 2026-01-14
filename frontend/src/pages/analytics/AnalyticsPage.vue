@@ -33,11 +33,7 @@
     <section class="panel">
       <div class="panel-header">
         <h3>Signing Trends</h3>
-<<<<<<< HEAD
-        <p>Document completion trends over the last 7 months</p>
-=======
         <p>Document completion trends over the selected range</p>
->>>>>>> e054afa1 (Save 1)
       </div>
       <div class="chart chart-lg">
         <canvas ref="signingCanvas" aria-label="Signing trends chart" role="img"></canvas>
@@ -61,11 +57,7 @@
       <article class="panel">
         <div class="panel-header">
           <h3>Top Users</h3>
-<<<<<<< HEAD
-          <p>Most active users this month</p>
-=======
           <p>Most active signers in the selected range</p>
->>>>>>> e054afa1 (Save 1)
         </div>
         <div class="users-list">
           <div v-for="user in topUsers" :key="user.name" class="user-row">
@@ -86,11 +78,7 @@
     <section class="panel">
       <div class="panel-header">
         <h3>Hourly Activity Distribution</h3>
-<<<<<<< HEAD
-        <p>Peak signing hours throughout the day</p>
-=======
         <p>Peak signing hours in the selected range</p>
->>>>>>> e054afa1 (Save 1)
       </div>
       <div class="chart chart-hourly">
         <canvas ref="hourlyCanvas" aria-label="Hourly activity chart" role="img"></canvas>
@@ -100,11 +88,8 @@
 </template>
 
 <script setup lang="ts">
-<<<<<<< HEAD
-=======
 import { useDocuments } from '@/features/documents/composables';
 import type { Document } from '@/features/documents/types';
->>>>>>> e054afa1 (Save 1)
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Chart } from 'chart.js/auto';
 
@@ -141,143 +126,6 @@ type AnalyticsData = {
 const rangeOptions: RangeOption[] = ['Last 7 days', 'Last 30 days', 'Last 90 days', 'This year'];
 const selectedRange = ref<RangeOption>('Last 7 days');
 
-<<<<<<< HEAD
-const analyticsData: Record<RangeOption, AnalyticsData> = {
-  'Last 7 days': {
-    stats: {
-      totalSigned: '1,280',
-      totalDelta: '+18.2%',
-      avgTime: '2.4h',
-      avgDelta: '-12.5%',
-      activeUsers: '156',
-      activeDelta: '+8.7%',
-      completionRate: '94.2%',
-      completionDelta: '+2.3%',
-      avgTone: 'positive',
-    },
-    signingTrends: {
-      labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'],
-      total: [150, 170, 195, 215, 250, 285, 310],
-      completed: [120, 145, 165, 185, 220, 255, 285],
-    },
-    documentTypes: {
-      labels: ['Contracts', 'NDAs', 'Agreements', 'Proposals', 'Other'],
-      values: [36, 25, 19, 12, 8],
-    },
-    topUsers: [
-      { name: 'Sarah Miller', initials: 'SM', documents: 45 },
-      { name: 'John Smith', initials: 'JS', documents: 38 },
-      { name: 'Emma Wilson', initials: 'EW', documents: 32 },
-      { name: 'Michael Brown', initials: 'MB', documents: 28 },
-      { name: 'Lisa Anderson', initials: 'LA', documents: 24 },
-    ],
-    hourly: {
-      labels: ['8AM', '9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM'],
-      values: [12, 28, 34, 41, 37, 25, 31, 45, 37, 21],
-    },
-  },
-  'Last 30 days': {
-    stats: {
-      totalSigned: '4,620',
-      totalDelta: '+9.4%',
-      avgTime: '2.8h',
-      avgDelta: '-6.8%',
-      activeUsers: '342',
-      activeDelta: '+6.1%',
-      completionRate: '92.4%',
-      completionDelta: '+1.2%',
-      avgTone: 'positive',
-    },
-    signingTrends: {
-      labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-      total: [860, 1040, 1160, 1560],
-      completed: [760, 930, 1020, 1370],
-    },
-    documentTypes: {
-      labels: ['Contracts', 'NDAs', 'Agreements', 'Proposals', 'Other'],
-      values: [34, 27, 18, 13, 8],
-    },
-    topUsers: [
-      { name: 'Sarah Miller', initials: 'SM', documents: 132 },
-      { name: 'John Smith', initials: 'JS', documents: 118 },
-      { name: 'Emma Wilson', initials: 'EW', documents: 104 },
-      { name: 'Michael Brown', initials: 'MB', documents: 93 },
-      { name: 'Lisa Anderson', initials: 'LA', documents: 87 },
-    ],
-    hourly: {
-      labels: ['8AM', '9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM'],
-      values: [18, 32, 38, 44, 40, 29, 36, 50, 42, 26],
-    },
-  },
-  'Last 90 days': {
-    stats: {
-      totalSigned: '12,450',
-      totalDelta: '+5.8%',
-      avgTime: '3.1h',
-      avgDelta: '+3.2%',
-      activeUsers: '712',
-      activeDelta: '+4.3%',
-      completionRate: '90.8%',
-      completionDelta: '-1.1%',
-      avgTone: 'negative',
-    },
-    signingTrends: {
-      labels: ['Sep', 'Oct', 'Nov'],
-      total: [3600, 4100, 4750],
-      completed: [3200, 3720, 4180],
-    },
-    documentTypes: {
-      labels: ['Contracts', 'NDAs', 'Agreements', 'Proposals', 'Other'],
-      values: [32, 26, 21, 13, 8],
-    },
-    topUsers: [
-      { name: 'Sarah Miller', initials: 'SM', documents: 280 },
-      { name: 'John Smith', initials: 'JS', documents: 262 },
-      { name: 'Emma Wilson', initials: 'EW', documents: 244 },
-      { name: 'Michael Brown', initials: 'MB', documents: 221 },
-      { name: 'Lisa Anderson', initials: 'LA', documents: 205 },
-    ],
-    hourly: {
-      labels: ['8AM', '9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM'],
-      values: [20, 35, 41, 48, 42, 31, 38, 54, 45, 29],
-    },
-  },
-  'This year': {
-    stats: {
-      totalSigned: '42,880',
-      totalDelta: '+14.6%',
-      avgTime: '2.9h',
-      avgDelta: '-4.2%',
-      activeUsers: '1,420',
-      activeDelta: '+11.4%',
-      completionRate: '93.1%',
-      completionDelta: '+0.9%',
-      avgTone: 'positive',
-    },
-    signingTrends: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-      total: [420, 520, 640, 730, 820, 910, 980, 1120, 1260, 1380, 1510, 1680],
-      completed: [360, 450, 560, 650, 740, 820, 900, 1030, 1170, 1290, 1420, 1580],
-    },
-    documentTypes: {
-      labels: ['Contracts', 'NDAs', 'Agreements', 'Proposals', 'Other'],
-      values: [35, 24, 20, 14, 7],
-    },
-    topUsers: [
-      { name: 'Sarah Miller', initials: 'SM', documents: 520 },
-      { name: 'John Smith', initials: 'JS', documents: 490 },
-      { name: 'Emma Wilson', initials: 'EW', documents: 460 },
-      { name: 'Michael Brown', initials: 'MB', documents: 418 },
-      { name: 'Lisa Anderson', initials: 'LA', documents: 392 },
-    ],
-    hourly: {
-      labels: ['8AM', '9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM'],
-      values: [22, 36, 44, 52, 46, 34, 42, 57, 49, 32],
-    },
-  },
-};
-
-=======
 const { documents } = useDocuments();
 
 const getRangeDays = (range: RangeOption) => {
@@ -486,7 +334,6 @@ const buildAnalyticsData = (range: RangeOption): AnalyticsData => {
 
 const currentData = computed(() => buildAnalyticsData(selectedRange.value));
 
->>>>>>> e054afa1 (Save 1)
 const signingCanvas = ref<HTMLCanvasElement | null>(null);
 const typesCanvas = ref<HTMLCanvasElement | null>(null);
 const hourlyCanvas = ref<HTMLCanvasElement | null>(null);
@@ -496,11 +343,6 @@ let typesChart: Chart | null = null;
 let hourlyChart: Chart | null = null;
 let themeObserver: MutationObserver | null = null;
 
-<<<<<<< HEAD
-const currentData = computed(() => analyticsData[selectedRange.value]);
-
-=======
->>>>>>> e054afa1 (Save 1)
 const toneFromDelta = (delta: string) => (delta.trim().startsWith('-') ? 'negative' : 'positive');
 
 const statCards = computed(() => {
@@ -850,13 +692,10 @@ watch(selectedRange, () => {
   updateCharts();
 });
 
-<<<<<<< HEAD
-=======
 watch(currentData, () => {
   updateCharts();
 }, { deep: true });
 
->>>>>>> e054afa1 (Save 1)
 onMounted(() => {
   buildSigningChart();
   buildTypesChart();
@@ -1167,7 +1006,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-<<<<<<< HEAD
-=======
 
->>>>>>> e054afa1 (Save 1)

@@ -50,14 +50,10 @@
 
       <div class="sidebar-footer">
         <div class="user-card">
-<<<<<<< HEAD
-          <span class="avatar">{{ userInitials }}</span>
-=======
           <span class="avatar">
             <img v-if="userAvatar" :src="userAvatar" alt="Profile" />
             <span v-else>{{ userInitials }}</span>
           </span>
->>>>>>> e054afa1 (Save 1)
           <div v-if="!collapsed">
             <p class="user-name">{{ userName }}</p>
             <p class="user-email">{{ userEmail }}</p>
@@ -85,28 +81,18 @@ defineEmits<{
 }>();
 
 const route = useRoute();
-<<<<<<< HEAD
-const { displayName, email, initials } = useAuthProfile();
-=======
 const { displayName, email, initials, avatarUrl } = useAuthProfile();
->>>>>>> e054afa1 (Save 1)
 
 const userName = computed(() => displayName.value);
 const userEmail = computed(() => email.value || 'Not signed in');
 const userInitials = computed(() => initials.value);
-<<<<<<< HEAD
-=======
 const userAvatar = computed(() => avatarUrl.value);
->>>>>>> e054afa1 (Save 1)
 
 const icons: Record<string, string> = {
   dashboard:
     '<svg viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
-<<<<<<< HEAD
-=======
   sign:
     '<svg viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>',
->>>>>>> e054afa1 (Save 1)
   documents:
     '<svg viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h6l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M13 3v5h5"/></svg>',
   analytics:
@@ -117,11 +103,8 @@ const icons: Record<string, string> = {
     '<svg viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7"/><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/></svg>',
   audit:
     '<svg viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l3 3v15a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M8 9h8"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>',
-<<<<<<< HEAD
-=======
   notifications:
     '<svg viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
->>>>>>> e054afa1 (Save 1)
   settings:
     '<svg viewBox="0 0 24 24" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/><path d="M4 12h2"/><path d="M18 12h2"/><path d="M12 4v2"/><path d="M12 18v2"/><path d="M6.2 6.2l1.4 1.4"/><path d="M16.4 16.4l1.4 1.4"/><path d="M6.2 17.8l1.4-1.4"/><path d="M16.4 7.6l1.4-1.4"/></svg>',
 };
@@ -288,8 +271,6 @@ const icons: Record<string, string> = {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-<<<<<<< HEAD
-=======
   overflow: hidden;
 }
 
@@ -298,7 +279,6 @@ const icons: Record<string, string> = {
   height: 100%;
   object-fit: cover;
   display: block;
->>>>>>> e054afa1 (Save 1)
 }
 
 .user-name {

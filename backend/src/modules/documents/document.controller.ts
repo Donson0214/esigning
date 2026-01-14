@@ -1,9 +1,4 @@
 import type { Request, Response, NextFunction } from 'express';
-<<<<<<< HEAD
-import { createDocumentSchema, sendDocumentSchema } from './document.types';
-import * as documentService from './document.service';
-import { listAuditEvents } from '../audit/audit.service';
-=======
 import {
   createDocumentSchema,
   sendDocumentSchema,
@@ -12,7 +7,6 @@ import {
 } from './document.types';
 import * as documentService from './document.service';
 import { getAuditReport } from '../signing/signing-integrity.service';
->>>>>>> e054afa1 (Save 1)
 
 function getParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -28,15 +22,11 @@ export async function createDocument(req: Request, res: Response, next: NextFunc
       ownerId: req.user!.id,
       title: input.title,
       file: req.file,
-<<<<<<< HEAD
-      meta: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined },
-=======
       meta: {
         ipAddress: req.ip,
         userAgent: req.get('user-agent') ?? undefined,
         correlationId: req.correlationId,
       },
->>>>>>> e054afa1 (Save 1)
     });
     res.status(201).json(document);
   } catch (err) {
@@ -77,15 +67,11 @@ export async function sendDocument(req: Request, res: Response, next: NextFuncti
       ownerId: req.user!.id,
       documentId,
       payload,
-<<<<<<< HEAD
-      meta: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined },
-=======
       meta: {
         ipAddress: req.ip,
         userAgent: req.get('user-agent') ?? undefined,
         correlationId: req.correlationId,
       },
->>>>>>> e054afa1 (Save 1)
     });
     res.json(document);
   } catch (err) {
@@ -93,8 +79,6 @@ export async function sendDocument(req: Request, res: Response, next: NextFuncti
   }
 }
 
-<<<<<<< HEAD
-=======
 export async function createField(req: Request, res: Response, next: NextFunction) {
   try {
     const input = createFieldSchema.parse(req.body);
@@ -166,7 +150,6 @@ export async function deleteField(req: Request, res: Response, next: NextFunctio
   }
 }
 
->>>>>>> e054afa1 (Save 1)
 export async function getStats(req: Request, res: Response, next: NextFunction) {
   try {
     const stats = await documentService.getDocumentStats(req.user!.id);
@@ -182,14 +165,8 @@ export async function getAudit(req: Request, res: Response, next: NextFunction) 
     if (!documentId) {
       return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
     }
-<<<<<<< HEAD
-    await documentService.getDocument(req.user!.id, documentId);
-    const auditEvents = await listAuditEvents(documentId);
-    res.json({ auditEvents });
-=======
     const report = await getAuditReport(req.user!.id, documentId);
     res.json(report);
->>>>>>> e054afa1 (Save 1)
   } catch (err) {
     next(err);
   }

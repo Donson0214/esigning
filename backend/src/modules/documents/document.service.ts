@@ -1,13 +1,6 @@
 import { DocumentStatus, FieldType, SignerStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
-<<<<<<< HEAD
-import { uploadBufferToCloudinary } from '../../utils/cloudinary.util';
-import { hashBuffer } from '../../utils/hash.util';
-import { createHttpError } from '../../utils/http-error.util';
-import { generateToken, hashToken } from '../../utils/crypto.util';
-import { sendMail } from '../../utils/mailer.util';
-=======
 import { buildCloudinaryAccessUrl, uploadBufferToCloudinary } from '../../utils/cloudinary.util';
 import { hashBuffer } from '../../utils/hash.util';
 import { createHttpError } from '../../utils/http-error.util';
@@ -15,16 +8,11 @@ import { generateToken, hashToken } from '../../utils/crypto.util';
 import { createEvent } from '../../shared/events';
 import { emitEvent } from '../../realtime/socket';
 import { buildNotificationEmail, dispatchNotification, notifyUserByEmail } from '../notifications/notification.service';
->>>>>>> e054afa1 (Save 1)
 import type { SendDocumentInput } from './document.types';
 
 type RequestMeta = {
   ipAddress?: string;
   userAgent?: string;
-<<<<<<< HEAD
-};
-
-=======
   correlationId?: string;
 };
 
@@ -116,7 +104,6 @@ async function resolveSigner(params: { documentId: string; signerEmail?: string;
   return null;
 }
 
->>>>>>> e054afa1 (Save 1)
 export async function createDocument(params: {
   ownerId: string;
   title: string;
@@ -124,9 +111,6 @@ export async function createDocument(params: {
   meta: RequestMeta;
 }) {
   const { ownerId, title, file, meta } = params;
-<<<<<<< HEAD
-  const hash = hashBuffer(file.buffer);
-=======
   const owner = await prisma.user.findUnique({
     where: { id: ownerId },
     select: { name: true, email: true },
@@ -134,7 +118,6 @@ export async function createDocument(params: {
   const ownerName = owner?.name?.trim() || owner?.email || 'Document owner';
   const hash = hashBuffer(file.buffer);
   const hashComputedAt = new Date();
->>>>>>> e054afa1 (Save 1)
 
   const upload = await uploadBufferToCloudinary(file.buffer, {
     folder: 'esigning/documents',
@@ -152,17 +135,6 @@ export async function createDocument(params: {
       fileMimeType: file.mimetype,
       fileSize: file.size,
       hash,
-<<<<<<< HEAD
-      status: DocumentStatus.DRAFT,
-      auditEvents: {
-        create: {
-          actorType: 'SENDER',
-          actorUserId: ownerId,
-          eventType: 'DOCUMENT_UPLOADED',
-          ipAddress: meta.ipAddress,
-          userAgent: meta.userAgent,
-        },
-=======
       hashAlgorithm: 'SHA-256',
       hashComputedAt,
       status: DocumentStatus.DRAFT,
@@ -181,13 +153,10 @@ export async function createDocument(params: {
         preHash: hash,
         algorithm: 'SHA-256',
         computedAt: hashComputedAt.toISOString(),
->>>>>>> e054afa1 (Save 1)
       },
     },
   });
 
-<<<<<<< HEAD
-=======
   const createdEvent = createEvent({
     event: 'doc.created',
     orgId: ownerId,
@@ -250,16 +219,11 @@ export async function createDocument(params: {
     console.warn('Notification dispatch failed', err);
   }
 
->>>>>>> e054afa1 (Save 1)
   return document;
 }
 
 export async function listDocuments(ownerId: string) {
-<<<<<<< HEAD
-  return prisma.document.findMany({
-=======
   const documents = await prisma.document.findMany({
->>>>>>> e054afa1 (Save 1)
     where: { ownerId },
     orderBy: { createdAt: 'desc' },
     include: {
@@ -268,10 +232,7 @@ export async function listDocuments(ownerId: string) {
       },
     },
   });
-<<<<<<< HEAD
-=======
   return documents.map((document) => withAccessUrls(document));
->>>>>>> e054afa1 (Save 1)
 }
 
 export async function getDocument(ownerId: string, documentId: string) {
@@ -287,18 +248,7 @@ export async function getDocument(ownerId: string, documentId: string) {
   if (!document) {
     throw createHttpError(404, 'DOCUMENT_NOT_FOUND', 'Document not found');
   }
-<<<<<<< HEAD
-  return document;
-}
-
-function buildSigningEmail(link: string, title: string) {
-  const subject = `Please sign: ${title}`;
-  const text = `You have been requested to sign "${title}".\n\nSign here: ${link}\n\nIf you did not expect this, ignore this email.`;
-  const html = `<p>You have been requested to sign "<strong>${title}</strong>".</p><p><a href="${link}">Open signing link</a></p><p>If you did not expect this, ignore this email.</p>`;
-  return { subject, text, html };
-=======
   return withAccessUrls(document);
->>>>>>> e054afa1 (Save 1)
 }
 
 export async function sendDocument(params: {
@@ -308,8 +258,6 @@ export async function sendDocument(params: {
   meta: RequestMeta;
 }) {
   const { ownerId, documentId, payload, meta } = params;
-<<<<<<< HEAD
-=======
   const payloadFields = payload.fields ?? [];
   const useExistingFields = payloadFields.length === 0;
   const owner = await prisma.user.findUnique({
@@ -317,7 +265,6 @@ export async function sendDocument(params: {
     select: { name: true, email: true },
   });
   const ownerName = owner?.name?.trim() || owner?.email || 'Document owner';
->>>>>>> e054afa1 (Save 1)
   const document = await prisma.document.findFirst({
     where: { id: documentId, ownerId },
   });
@@ -359,28 +306,6 @@ export async function sendDocument(params: {
     const signersByEmail = new Map(createdSigners.map((s) => [s.email, s]));
     const signersByIndex = new Map(createdSigners.map((s, index) => [index, s]));
 
-<<<<<<< HEAD
-    const fieldsData = payload.fields.map((field) => {
-      const signer =
-        (field.signerEmail ? signersByEmail.get(field.signerEmail.toLowerCase()) : undefined) ??
-        (field.signerIndex !== undefined ? signersByIndex.get(field.signerIndex) : undefined);
-      if (!signer) {
-        throw createHttpError(400, 'INVALID_SIGNER_REFERENCE', 'Field signer reference is invalid');
-      }
-      return {
-        documentId: document.id,
-        signerId: signer.id,
-        type: field.type as FieldType,
-        page: field.page,
-        x: field.x,
-        y: field.y,
-        width: field.width,
-        height: field.height,
-      };
-    });
-
-    await tx.signatureField.createMany({ data: fieldsData });
-=======
     let createdFields = [];
     if (useExistingFields) {
       const existingFields = await tx.signatureField.findMany({
@@ -440,26 +365,18 @@ export async function sendDocument(params: {
         createdFields.push(createdField);
       }
     }
->>>>>>> e054afa1 (Save 1)
 
     const updated = await tx.document.update({
       where: { id: document.id },
       data: {
         status: DocumentStatus.SENT,
         sentAt: new Date(),
-<<<<<<< HEAD
-      },
-    });
-
-    await tx.auditEvent.create({
-=======
         fieldVersion: { increment: 1 },
         version: { increment: 1 },
       },
     });
 
     const auditEvent = await tx.auditEvent.create({
->>>>>>> e054afa1 (Save 1)
       data: {
         documentId: document.id,
         actorType: 'SENDER',
@@ -470,11 +387,7 @@ export async function sendDocument(params: {
       },
     });
 
-<<<<<<< HEAD
-    return { updated, createdSigners };
-=======
     return { updated, createdSigners, createdFields, auditEvent };
->>>>>>> e054afa1 (Save 1)
   });
 
   for (const signer of result.createdSigners) {
@@ -483,18 +396,6 @@ export async function sendDocument(params: {
       throw createHttpError(500, 'SIGNING_TOKEN_MISSING', 'Signing token missing');
     }
     const link = `${env.signingAppUrl}/${token}`;
-<<<<<<< HEAD
-    const message = buildSigningEmail(link, document.title);
-    await sendMail({
-      to: signer.email,
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    });
-  }
-
-  return result.updated;
-=======
     const emailMessage = buildNotificationEmail('signer.invited', {
       recipientName: signer.name ?? signer.email,
       documentTitle: document.title,
@@ -650,7 +551,6 @@ export async function sendDocument(params: {
   }
 
   return withAccessUrls(result.updated);
->>>>>>> e054afa1 (Save 1)
 }
 
 export async function getDocumentStats(ownerId: string) {
@@ -674,14 +574,6 @@ export async function getDocumentStats(ownerId: string) {
     ),
     sent: counts.SENT ?? 0,
     viewed: counts.VIEWED ?? 0,
-<<<<<<< HEAD
-    signed: counts.SIGNED ?? 0,
-    completed: counts.COMPLETED ?? 0,
-    draft: counts.DRAFT ?? 0,
-    pending: (counts.SENT ?? 0) + (counts.VIEWED ?? 0) + (counts.SIGNED ?? 0),
-  };
-}
-=======
     inProgress: counts.IN_PROGRESS ?? 0,
     signed: counts.SIGNED ?? 0,
     completed: counts.COMPLETED ?? 0,
@@ -925,4 +817,3 @@ export async function deleteField(params: {
 
   return { deleted: true };
 }
->>>>>>> e054afa1 (Save 1)

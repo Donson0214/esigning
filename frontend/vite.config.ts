@@ -7,15 +7,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-<<<<<<< HEAD
-=======
       '@shared': fileURLToPath(new URL('../backend/src/shared', import.meta.url)),
     },
   },
   server: {
     fs: {
       allow: ['..'],
->>>>>>> e054afa1 (Save 1)
     },
   },
 });

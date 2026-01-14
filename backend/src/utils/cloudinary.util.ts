@@ -1,8 +1,5 @@
 import { Readable } from 'stream';
-<<<<<<< HEAD
-=======
 import path from 'path';
->>>>>>> e054afa1 (Save 1)
 import { cloudinary } from '../config/cloudinary';
 
 type UploadResult = {
@@ -10,8 +7,6 @@ type UploadResult = {
   publicId: string;
 };
 
-<<<<<<< HEAD
-=======
 type CloudinaryDelivery = {
   resourceType: 'image' | 'raw' | 'video';
   type: 'upload' | 'private' | 'authenticated';
@@ -59,7 +54,6 @@ function normalizePublicId(publicId: string) {
   return publicId.slice(0, -ext.length);
 }
 
->>>>>>> e054afa1 (Save 1)
 export async function uploadBufferToCloudinary(
   buffer: Buffer,
   options: { folder: string; fileName: string; resourceType?: 'auto' | 'raw' },
@@ -84,8 +78,6 @@ export async function uploadBufferToCloudinary(
     Readable.from(buffer).pipe(stream);
   });
 }
-<<<<<<< HEAD
-=======
 
 export function buildCloudinaryAccessUrl(params: {
   url: string;
@@ -117,4 +109,3 @@ export function buildCloudinaryAccessUrl(params: {
     return params.url;
   }
 }
->>>>>>> e054afa1 (Save 1)

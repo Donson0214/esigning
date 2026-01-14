@@ -1,8 +1,5 @@
 import multer from 'multer';
-<<<<<<< HEAD
-=======
 import type { Request, Response, NextFunction } from 'express';
->>>>>>> e054afa1 (Save 1)
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -16,9 +13,6 @@ const upload = multer({
   },
 });
 
-<<<<<<< HEAD
-export const uploadPdf = upload.single('file');
-=======
 function validatePdfBuffer(req: Request, res: Response, next: NextFunction) {
   if (!req.file) {
     return next();
@@ -31,4 +25,3 @@ function validatePdfBuffer(req: Request, res: Response, next: NextFunction) {
 }
 
 export const uploadPdf = [upload.single('file'), validatePdfBuffer];
->>>>>>> e054afa1 (Save 1)

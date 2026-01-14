@@ -15,33 +15,23 @@ enum DocumentStatus {
   DRAFT
   SENT
   VIEWED
-<<<<<<< HEAD
-  SIGNED
-  COMPLETED
-=======
   IN_PROGRESS
   SIGNED
   COMPLETED
   DECLINED
   EXPIRED
->>>>>>> e054afa1 (Save 1)
 }
 
 enum SignerStatus {
   PENDING
   VIEWED
   SIGNED
-<<<<<<< HEAD
-=======
   DECLINED
->>>>>>> e054afa1 (Save 1)
 }
 
 enum FieldType {
   SIGNATURE
   DATE
-<<<<<<< HEAD
-=======
   INITIAL
   FULL_NAME
   EMAIL
@@ -59,7 +49,6 @@ enum FieldStatus {
   EMPTY
   FILLED
   SIGNED
->>>>>>> e054afa1 (Save 1)
 }
 
 enum AuditEventType {
@@ -68,8 +57,6 @@ enum AuditEventType {
   DOCUMENT_VIEWED
   DOCUMENT_SIGNED
   DOCUMENT_COMPLETED
-<<<<<<< HEAD
-=======
   DOCUMENT_HASH_COMPUTED
   DOCUMENT_DECLINED
   DOCUMENT_EXPIRED
@@ -81,7 +68,6 @@ enum AuditEventType {
   SIGNATURE_CAPTURED
   SIGNATURE_APPLIED
   SIGNATURE_REJECTED
->>>>>>> e054afa1 (Save 1)
 }
 
 enum AuditActorType {
@@ -90,8 +76,6 @@ enum AuditActorType {
   SYSTEM
 }
 
-<<<<<<< HEAD
-=======
 enum SigningSessionStatus {
   ACTIVE
   FINALIZED
@@ -117,27 +101,20 @@ enum NotificationDeliveryStatus {
   FAILED
 }
 
->>>>>>> e054afa1 (Save 1)
 model User {
   id        String    @id @default(uuid())
   email     String    @unique
   password  String
   name      String?
-<<<<<<< HEAD
-=======
   jobTitle  String?
   photoUrl  String?
->>>>>>> e054afa1 (Save 1)
   role      UserRole  @default(SENDER)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   documents Document[]
   auditEvents AuditEvent[]
-<<<<<<< HEAD
-=======
   notifications Notification[]
   notificationPreference NotificationPreference?
->>>>>>> e054afa1 (Save 1)
 }
 
 model Document {
@@ -150,9 +127,6 @@ model Document {
   fileName     String
   fileMimeType String
   fileSize     Int
-<<<<<<< HEAD
-  hash         String
-=======
   signedFileUrl      String?
   signedFilePublicId String?
   hash         String
@@ -162,14 +136,11 @@ model Document {
   postHashAlgorithm String?
   postHashComputedAt DateTime?
   postHashVersion   Int            @default(0)
->>>>>>> e054afa1 (Save 1)
   status       DocumentStatus  @default(DRAFT)
   sentAt       DateTime?
   viewedAt     DateTime?
   signedAt     DateTime?
   completedAt  DateTime?
-<<<<<<< HEAD
-=======
   declinedAt   DateTime?
   expiredAt    DateTime?
   lockedAt     DateTime?
@@ -177,7 +148,6 @@ model Document {
   version      Int            @default(1)
   serverAttestation String?
   serverAttestationAlgorithm String?
->>>>>>> e054afa1 (Save 1)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   signers      Signer[]
@@ -185,11 +155,8 @@ model Document {
   signatures   Signature[]
   auditEvents  AuditEvent[]
   certificate  Certificate?
-<<<<<<< HEAD
-=======
   signingSessions SigningSession[]
   events       DocumentEvent[]
->>>>>>> e054afa1 (Save 1)
 
   @@index([ownerId])
 }
@@ -206,20 +173,14 @@ model Signer {
   signingTokenExpiresAt DateTime?
   viewedAt             DateTime?
   signedAt             DateTime?
-<<<<<<< HEAD
-=======
   declinedAt           DateTime?
   declineReason        String?
->>>>>>> e054afa1 (Save 1)
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
   fields               SignatureField[]
   signatures           Signature[]
   auditEvents          AuditEvent[]
-<<<<<<< HEAD
-=======
   signingSessions      SigningSession[]
->>>>>>> e054afa1 (Save 1)
 
   @@index([documentId])
   @@index([email])
@@ -230,11 +191,6 @@ model SignatureField {
   id         String     @id @default(uuid())
   documentId String
   document   Document   @relation(fields: [documentId], references: [id])
-<<<<<<< HEAD
-  signerId   String
-  signer     Signer     @relation(fields: [signerId], references: [id])
-  type       FieldType
-=======
   signerId   String?
   signer     Signer?    @relation(fields: [signerId], references: [id])
   signerEmail String?
@@ -245,7 +201,6 @@ model SignatureField {
   value      String?
   status     FieldStatus @default(EMPTY)
   options    Json?
->>>>>>> e054afa1 (Save 1)
   page       Int
   x          Float
   y          Float
@@ -257,10 +212,7 @@ model SignatureField {
 
   @@index([documentId])
   @@index([signerId])
-<<<<<<< HEAD
-=======
   @@index([signerEmail])
->>>>>>> e054afa1 (Save 1)
 }
 
 model Signature {
@@ -272,14 +224,11 @@ model Signature {
   fieldId    String
   field      SignatureField @relation(fields: [fieldId], references: [id])
   value      String
-<<<<<<< HEAD
-=======
   signingSessionId String?
   signingSession   SigningSession? @relation(fields: [signingSessionId], references: [id])
   manifestHash     String?
   artifactHash     String?
   artifactType     SignatureArtifactType?
->>>>>>> e054afa1 (Save 1)
   signedAt   DateTime       @default(now())
   createdAt  DateTime       @default(now())
 
@@ -319,8 +268,6 @@ model Certificate {
   issuedAt   DateTime @default(now())
   createdAt  DateTime @default(now())
 }
-<<<<<<< HEAD
-=======
 
 model SigningSession {
   id                      String                @id @default(uuid())
@@ -419,4 +366,3 @@ model NotificationDelivery {
   @@unique([notificationId, channel])
   @@index([channel, status])
 }
->>>>>>> e054afa1 (Save 1)

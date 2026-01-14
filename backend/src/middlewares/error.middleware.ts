@@ -1,10 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger.util';
-<<<<<<< HEAD
-=======
 import { emitEvent } from '../realtime/socket';
 import { createEvent, type EventReasonCode } from '../shared/events';
->>>>>>> e054afa1 (Save 1)
 
 export function notFound(req: Request, res: Response) {
   res.status(404).json({ error: 'NOT_FOUND', path: req.path });
@@ -22,8 +19,6 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     });
   }
   const status = typeof err?.status === 'number' ? err.status : 500;
-<<<<<<< HEAD
-=======
 
   if (req.user) {
     const docId = typeof req.params?.docId === 'string' ? req.params.docId : req.params?.id;
@@ -46,7 +41,6 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     }
   }
 
->>>>>>> e054afa1 (Save 1)
   res.status(status).json({
     error: err?.code ?? 'INTERNAL_ERROR',
     message: err?.message ?? 'Something went wrong',

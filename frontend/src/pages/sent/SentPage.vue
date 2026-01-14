@@ -43,14 +43,10 @@
 </template>
 
 <script setup lang="ts">
-<<<<<<< HEAD
-type SentStatus = 'Pending' | 'Viewed' | 'Signed' | 'Expired';
-=======
 import { computed } from 'vue';
 import { useDocuments } from '@/features/documents/composables';
 
 type SentStatus = 'Pending' | 'Viewed' | 'Signed' | 'Completed' | 'Declined' | 'Expired';
->>>>>>> e054afa1 (Save 1)
 
 type SentDocument = {
   id: string;
@@ -61,42 +57,6 @@ type SentDocument = {
   status: SentStatus;
 };
 
-<<<<<<< HEAD
-const sentDocuments: SentDocument[] = [
-  {
-    id: 'sent-1',
-    title: 'Service Agreement - ABC Ltd',
-    recipient: 'contracts@abc.com',
-    date: '2026-01-11',
-    views: 3,
-    status: 'Pending',
-  },
-  {
-    id: 'sent-2',
-    title: 'NDA Agreement - Tech Corp',
-    recipient: 'legal@techcorp.com',
-    date: '2026-01-10',
-    views: 5,
-    status: 'Viewed',
-  },
-  {
-    id: 'sent-3',
-    title: 'Consulting Agreement',
-    recipient: 'admin@consulting.com',
-    date: '2026-01-09',
-    views: 2,
-    status: 'Signed',
-  },
-  {
-    id: 'sent-4',
-    title: 'Partnership MOU',
-    recipient: 'partner@company.com',
-    date: '2026-01-08',
-    views: 1,
-    status: 'Expired',
-  },
-];
-=======
 const { documents } = useDocuments();
 
 const mapStatus = (status: string): SentStatus => {
@@ -132,7 +92,6 @@ const sentDocuments = computed<SentDocument[]>(() =>
       };
     }),
 );
->>>>>>> e054afa1 (Save 1)
 
 const statusClass = (status: SentStatus) => {
   switch (status) {
@@ -141,14 +100,10 @@ const statusClass = (status: SentStatus) => {
     case 'Viewed':
       return 'info';
     case 'Signed':
-<<<<<<< HEAD
-      return 'success';
-=======
     case 'Completed':
       return 'success';
     case 'Declined':
     case 'Expired':
->>>>>>> e054afa1 (Save 1)
     default:
       return 'danger';
   }
@@ -311,7 +266,4 @@ const formatDate = (value: string) => {
   }
 }
 </style>
-<<<<<<< HEAD
-=======
 
->>>>>>> e054afa1 (Save 1)

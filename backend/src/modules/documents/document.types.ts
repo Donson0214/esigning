@@ -14,9 +14,6 @@ const fieldSchema = z
   .object({
     signerEmail: z.string().email().optional(),
     signerIndex: z.number().int().min(0).optional(),
-<<<<<<< HEAD
-    type: z.enum(['SIGNATURE', 'DATE']),
-=======
     type: z.enum([
       'SIGNATURE',
       'DATE',
@@ -37,7 +34,6 @@ const fieldSchema = z
     required: z.boolean().optional(),
     value: z.string().optional(),
     options: z.record(z.any()).optional(),
->>>>>>> e054afa1 (Save 1)
     page: z.number().int().min(1),
     x: z.number().min(0),
     y: z.number().min(0),
@@ -51,9 +47,6 @@ const fieldSchema = z
 
 export const sendDocumentSchema = z.object({
   signers: z.array(signerSchema).min(1),
-<<<<<<< HEAD
-  fields: z.array(fieldSchema).min(1),
-=======
   fields: z.array(fieldSchema).min(1).optional(),
 });
 
@@ -73,13 +66,9 @@ export const updateFieldSchema = z.object({
   height: fieldSchema.shape.height.optional(),
   signerEmail: fieldSchema.shape.signerEmail.optional(),
   signerIndex: fieldSchema.shape.signerIndex.optional(),
->>>>>>> e054afa1 (Save 1)
 });
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 export type SendDocumentInput = z.infer<typeof sendDocumentSchema>;
-<<<<<<< HEAD
-=======
 export type CreateFieldInput = z.infer<typeof createFieldSchema>;
 export type UpdateFieldInput = z.infer<typeof updateFieldSchema>;
->>>>>>> e054afa1 (Save 1)

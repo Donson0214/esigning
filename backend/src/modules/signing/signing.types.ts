@@ -11,9 +11,6 @@ export const submitSignatureSchema = z.object({
     .min(1),
 });
 
-<<<<<<< HEAD
-export type SubmitSignatureInput = z.infer<typeof submitSignatureSchema>;
-=======
 export const createSigningSessionSchema = z.object({
   clientMutationId: z.string().uuid().optional(),
 });
@@ -45,4 +42,3 @@ export type CreateSigningSessionInput = z.infer<typeof createSigningSessionSchem
 export type SubmitManifestInput = z.infer<typeof submitManifestSchema>;
 export type UploadSignatureInput = z.infer<typeof uploadSignatureSchema>;
 export type ApplySignatureInput = z.infer<typeof applySignatureSchema>;
->>>>>>> e054afa1 (Save 1)

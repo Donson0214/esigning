@@ -3,9 +3,6 @@ import { env } from '../config/env';
 
 export const logger = pino({
   level: env.nodeEnv === 'production' ? 'info' : 'debug',
-<<<<<<< HEAD
-  redact: ['req.headers.authorization'],
-=======
   redact: [
     'req.headers.authorization',
     'req.headers.cookie',
@@ -17,5 +14,4 @@ export const logger = pino({
     'req.body.artifact',
     'req.body.signingToken',
   ],
->>>>>>> e054afa1 (Save 1)
 });

@@ -6,8 +6,6 @@ export const AUDIT_EVENT_LABELS: Record<AuditEventType, string> = {
   DOCUMENT_VIEWED: 'Document viewed',
   DOCUMENT_SIGNED: 'Document signed',
   DOCUMENT_COMPLETED: 'Document completed',
-<<<<<<< HEAD
-=======
   DOCUMENT_HASH_COMPUTED: 'Document hash computed',
   DOCUMENT_DECLINED: 'Document declined',
   DOCUMENT_EXPIRED: 'Document expired',
@@ -19,5 +17,4 @@ export const AUDIT_EVENT_LABELS: Record<AuditEventType, string> = {
   SIGNATURE_CAPTURED: 'Signature captured',
   SIGNATURE_APPLIED: 'Signature applied to document',
   SIGNATURE_REJECTED: 'Signature rejected',
->>>>>>> e054afa1 (Save 1)
 };

@@ -80,8 +80,6 @@
         </div>
         <div class="toggle-row">
           <div>
-<<<<<<< HEAD
-=======
             <p class="toggle-title">In-app notifications</p>
             <p class="toggle-desc">Show realtime updates in the app</p>
           </div>
@@ -92,7 +90,6 @@
         </div>
         <div class="toggle-row">
           <div>
->>>>>>> e054afa1 (Save 1)
             <p class="toggle-title">Document signed</p>
             <p class="toggle-desc">When a document is signed</p>
           </div>
@@ -234,14 +231,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { sendPasswordResetEmail } from 'firebase/auth';
-<<<<<<< HEAD
-import { getFirebase, hasFirebaseConfig } from '@/shared/lib/firebase';
-import { useAuthProfile } from '@/features/auth/useAuthProfile';
-
-type SecurityModal = 'password' | 'twoFactor' | 'sessions' | null;
-
-const { user, displayName, email, profile, updateProfileDetails } = useAuthProfile();
-=======
 import { useAuthProfile } from '@/features/auth/useAuthProfile';
 import { getFirebase, hasFirebaseConfig } from '@/shared/lib/firebase';
 import { getNotificationPreferences, updateNotificationPreferences } from '@/features/notifications/api';
@@ -249,7 +238,6 @@ import { getNotificationPreferences, updateNotificationPreferences } from '@/fea
 type SecurityModal = 'password' | 'twoFactor' | 'sessions' | null;
 
 const { user, displayName, email, profile, jobTitle, updateProfileDetails } = useAuthProfile();
->>>>>>> e054afa1 (Save 1)
 
 const profileForm = reactive({
   name: '',
@@ -259,10 +247,7 @@ const profileForm = reactive({
 
 const notifications = reactive({
   email: true,
-<<<<<<< HEAD
-=======
   inApp: true,
->>>>>>> e054afa1 (Save 1)
   signed: true,
   viewed: true,
   expiry: true,
@@ -297,23 +282,6 @@ const modalTitle = computed(() => {
 const syncForm = () => {
   profileForm.name = profile.value?.name?.trim() || displayName.value;
   profileForm.email = email.value || '';
-<<<<<<< HEAD
-  profileForm.jobTitle = profile.value?.jobTitle?.trim() || '';
-};
-
-const loadPreferences = () => {
-  const stored = localStorage.getItem('settings_notifications');
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored) as typeof notifications;
-      notifications.email = parsed.email ?? notifications.email;
-      notifications.signed = parsed.signed ?? notifications.signed;
-      notifications.viewed = parsed.viewed ?? notifications.viewed;
-      notifications.expiry = parsed.expiry ?? notifications.expiry;
-    } catch {
-      // ignore
-    }
-=======
   profileForm.jobTitle = profile.value?.jobTitle?.trim() || jobTitle.value || '';
 };
 
@@ -331,7 +299,6 @@ const loadPreferences = async () => {
       true;
   } catch {
     // ignore preference load failures
->>>>>>> e054afa1 (Save 1)
   }
   const securityStored = localStorage.getItem('settings_security');
   if (securityStored) {
@@ -351,25 +318,13 @@ watch([displayName, email, profile], () => {
 const resetForm = () => {
   formTouched.value = false;
   syncForm();
-<<<<<<< HEAD
-  loadPreferences();
-=======
   void loadPreferences();
->>>>>>> e054afa1 (Save 1)
   statusMessage.value = '';
 };
 
 const saveSettings = async () => {
   statusMessage.value = '';
   statusError.value = false;
-<<<<<<< HEAD
-  if (!hasFirebaseConfig()) {
-    statusMessage.value = 'Firebase is not configured.';
-    statusError.value = true;
-    return;
-  }
-=======
->>>>>>> e054afa1 (Save 1)
   if (!user.value) {
     statusMessage.value = 'You must be signed in to save changes.';
     statusError.value = true;
@@ -381,9 +336,6 @@ const saveSettings = async () => {
       name: profileForm.name,
       jobTitle: profileForm.jobTitle,
     });
-<<<<<<< HEAD
-    localStorage.setItem('settings_notifications', JSON.stringify(notifications));
-=======
     await updateNotificationPreferences({
       emailEnabled: notifications.email,
       inAppEnabled: notifications.inApp,
@@ -395,7 +347,6 @@ const saveSettings = async () => {
         'reminder.expiring_soon': notifications.expiry,
       },
     });
->>>>>>> e054afa1 (Save 1)
     localStorage.setItem('settings_security', JSON.stringify({ twoFactorEnabled: twoFactorEnabled.value }));
     statusMessage.value = 'Changes saved successfully.';
   } catch (error) {
@@ -416,17 +367,6 @@ const closeSecurity = () => {
 };
 
 const sendReset = async () => {
-<<<<<<< HEAD
-  if (!hasFirebaseConfig()) return;
-  if (!profileForm.email) return;
-  sendingReset.value = true;
-  try {
-    const { auth } = getFirebase();
-    await sendPasswordResetEmail(auth, profileForm.email);
-    statusMessage.value = 'Password reset email sent.';
-    statusError.value = false;
-    closeSecurity();
-=======
   if (!profileForm.email) return;
   sendingReset.value = true;
   try {
@@ -439,7 +379,6 @@ const sendReset = async () => {
       statusMessage.value = 'Password reset is handled by your administrator.';
       statusError.value = false;
     }
->>>>>>> e054afa1 (Save 1)
   } catch (error) {
     statusMessage.value = error instanceof Error ? error.message : 'Unable to send reset email.';
     statusError.value = true;
@@ -454,11 +393,7 @@ const signOutOthers = () => {
   closeSecurity();
 };
 
-<<<<<<< HEAD
-loadPreferences();
-=======
 void loadPreferences();
->>>>>>> e054afa1 (Save 1)
 </script>
 
 <style scoped>

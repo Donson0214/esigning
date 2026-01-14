@@ -1,9 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-<<<<<<< HEAD
-import { loginSchema, registerSchema } from './auth.types';
-=======
 import { firebaseAuthSchema, loginSchema, registerSchema } from './auth.types';
->>>>>>> e054afa1 (Save 1)
 import * as authService from './auth.service';
 
 export async function register(req: Request, res: Response, next: NextFunction) {
@@ -26,8 +22,6 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-<<<<<<< HEAD
-=======
 export async function firebaseAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const input = firebaseAuthSchema.parse(req.body);
@@ -38,7 +32,6 @@ export async function firebaseAuth(req: Request, res: Response, next: NextFuncti
   }
 }
 
->>>>>>> e054afa1 (Save 1)
 export async function me(req: Request, res: Response) {
   res.json({ user: req.user });
 }

@@ -88,17 +88,12 @@
 </template>
 
 <script setup lang="ts">
-<<<<<<< HEAD
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { Chart } from 'chart.js/auto';
-=======
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Chart } from 'chart.js/auto';
 import { useDocuments } from '@/features/documents/composables';
 import type { Document } from '@/features/documents/types';
 
 const { documents } = useDocuments();
->>>>>>> e054afa1 (Save 1)
 
 const lineCanvas = ref<HTMLCanvasElement | null>(null);
 const donutCanvas = ref<HTMLCanvasElement | null>(null);
@@ -107,38 +102,6 @@ const barCanvas = ref<HTMLCanvasElement | null>(null);
 let lineChart: Chart | null = null;
 let donutChart: Chart | null = null;
 let barChart: Chart | null = null;
-<<<<<<< HEAD
-let refreshTimer: number | undefined;
-let themeObserver: MutationObserver | null = null;
-
-const activityLabels = ['Jan 6', 'Jan 7', 'Jan 8', 'Jan 9', 'Jan 10', 'Jan 11', 'Jan 12'];
-const activityValues = ref([12, 18, 15, 25, 22, 30, 28]);
-
-const weeklyLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const weeklySigned = ref([14, 22, 17, 25, 30, 12, 8]);
-const weeklyPending = ref([8, 12, 6, 9, 5, 3, 2]);
-const signedToday = ref(28);
-
-const statusBreakdown = ref([
-  { key: 'completed', label: 'Completed', value: 156, colorVar: '--success' },
-  { key: 'pending', label: 'Pending', value: 42, colorVar: '--accent-warm' },
-  { key: 'expired', label: 'Expired', value: 8, colorVar: '--danger' },
-  { key: 'draft', label: 'Draft', value: 15, colorVar: '--muted' },
-]);
-
-const statusBounds: Record<string, [number, number]> = {
-  completed: [120, 220],
-  pending: [20, 70],
-  expired: [3, 18],
-  draft: [6, 28],
-};
-
-const statCards = computed(() => {
-  const totals = statusBreakdown.value.reduce((sum, item) => sum + item.value, 0);
-  const completed = statusBreakdown.value.find((item) => item.key === 'completed')?.value ?? 0;
-  const pending = statusBreakdown.value.find((item) => item.key === 'pending')?.value ?? 0;
-  const todaySigned = signedToday.value;
-=======
 let themeObserver: MutationObserver | null = null;
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -313,108 +276,42 @@ const statCards = computed(() => {
   const pendingDelta = buildDelta((doc) => isPendingStatus(doc.status));
   const completedDelta = buildDelta((doc) => doc.status === 'COMPLETED');
 
->>>>>>> e054afa1 (Save 1)
   return [
     {
       label: 'Total Documents',
       value: totals,
-<<<<<<< HEAD
-      change: '+12.5%',
-      trend: 'up',
-=======
       change: totalDelta.change,
       trend: totalDelta.trend,
->>>>>>> e054afa1 (Save 1)
       tone: 'accent',
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h6l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M13 3v5h5"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>',
     },
     {
       label: 'Signed Today',
-<<<<<<< HEAD
-      value: todaySigned,
-      change: '+8.2%',
-      trend: 'up',
-=======
       value: signedTodayValue,
       change: signedDelta.change,
       trend: signedDelta.trend,
->>>>>>> e054afa1 (Save 1)
       tone: 'success',
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h6l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M13 3v5h5"/><path d="M9 14l2 2 4-4"/></svg>',
     },
     {
       label: 'Pending',
       value: pending,
-<<<<<<< HEAD
-      change: '-3.1%',
-      trend: 'down',
-=======
       change: pendingDelta.change,
       trend: pendingDelta.trend,
->>>>>>> e054afa1 (Save 1)
       tone: 'warning',
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
     },
     {
       label: 'Completed',
       value: completed,
-<<<<<<< HEAD
-      change: '+15.3%',
-      trend: 'up',
-=======
       change: completedDelta.change,
       trend: completedDelta.trend,
->>>>>>> e054afa1 (Save 1)
       tone: 'success',
       icon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h6l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M13 3v5h5"/><path d="M9 14l2 2 4-4"/></svg>',
     },
   ];
 });
 
-<<<<<<< HEAD
-const activities = [
-  {
-    title: 'Document signed',
-    document: 'Employment Contract - Sarah Miller',
-    status: 'success',
-    statusLabel: 'Completed',
-    time: '2 minutes ago',
-    icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
-  },
-  {
-    title: 'Document viewed',
-    document: 'NDA Agreement - Tech Corp',
-    status: 'info',
-    statusLabel: 'Viewed',
-    time: '15 minutes ago',
-    icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
-  },
-  {
-    title: 'Document sent',
-    document: 'Service Agreement - ABC Ltd',
-    status: 'warning',
-    statusLabel: 'Pending',
-    time: '1 hour ago',
-    icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
-  },
-  {
-    title: 'Document signed',
-    document: 'Partnership Agreement - XYZ Inc',
-    status: 'success',
-    statusLabel: 'Completed',
-    time: '2 hours ago',
-    icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
-  },
-  {
-    title: 'Document expired',
-    document: 'Lease Agreement - Property Co',
-    status: 'danger',
-    statusLabel: 'Expired',
-    time: '3 hours ago',
-    icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>',
-  },
-];
-=======
 const formatRelativeTime = (date: Date) => {
   const diffMs = Date.now() - date.getTime();
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -471,7 +368,6 @@ const activities = computed(() => {
   );
   return sorted.slice(0, 5).map(mapActivity);
 });
->>>>>>> e054afa1 (Save 1)
 
 const cssColor = (value: string) => (value.startsWith('--') ? `var(${value})` : value);
 
@@ -490,11 +386,7 @@ const buildLineChart = () => {
   lineChart = new Chart(lineCanvas.value, {
     type: 'line',
     data: {
-<<<<<<< HEAD
-      labels: activityLabels,
-=======
       labels: activityLabels.value,
->>>>>>> e054afa1 (Save 1)
       datasets: [
         {
           label: 'Documents',
@@ -533,17 +425,9 @@ const buildLineChart = () => {
         },
         y: {
           beginAtZero: true,
-<<<<<<< HEAD
-          min: 0,
-          max: 32,
-          grid: { color: colors.line, drawBorder: false, borderDash: [4, 4] },
-          border: { display: true, color: colors.line },
-          ticks: { color: colors.muted, stepSize: 8 },
-=======
           grid: { color: colors.line, drawBorder: false, borderDash: [4, 4] },
           border: { display: true, color: colors.line },
           ticks: { color: colors.muted, stepSize: 4 },
->>>>>>> e054afa1 (Save 1)
         },
       },
     },
@@ -592,11 +476,7 @@ const buildBarChart = () => {
   barChart = new Chart(barCanvas.value, {
     type: 'bar',
     data: {
-<<<<<<< HEAD
-      labels: weeklyLabels,
-=======
       labels: weeklyLabels.value,
->>>>>>> e054afa1 (Save 1)
       datasets: [
         {
           label: 'Signed',
@@ -639,17 +519,9 @@ const buildBarChart = () => {
         },
         y: {
           beginAtZero: true,
-<<<<<<< HEAD
-          min: 0,
-          max: 32,
-          grid: { color: colors.line, drawTicks: false, borderDash: [4, 4] },
-          border: { display: true, color: colors.line },
-          ticks: { color: colors.muted, stepSize: 8 },
-=======
           grid: { color: colors.line, drawTicks: false, borderDash: [4, 4] },
           border: { display: true, color: colors.line },
           ticks: { color: colors.muted, stepSize: 4 },
->>>>>>> e054afa1 (Save 1)
         },
       },
     },
@@ -731,37 +603,6 @@ const applyTheme = () => {
   barChart?.update('none');
 };
 
-<<<<<<< HEAD
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
-const jitter = (value: number, min: number, max: number) =>
-  clamp(value + Math.round((Math.random() - 0.5) * 6), min, max);
-
-const refreshMetrics = () => {
-  activityValues.value = activityValues.value.map((value) => jitter(value, 8, 32));
-  weeklySigned.value = weeklySigned.value.map((value) => jitter(value, 6, 32));
-  weeklyPending.value = weeklyPending.value.map((value) => jitter(value, 2, 14));
-  signedToday.value = jitter(signedToday.value, 20, 32);
-  statusBreakdown.value.forEach((item) => {
-    const bounds = statusBounds[item.key] ?? [0, 300];
-    item.value = jitter(item.value, bounds[0], bounds[1]);
-  });
-
-  if (lineChart) {
-    lineChart.data.datasets[0].data = [...activityValues.value];
-    lineChart.update();
-  }
-  if (barChart) {
-    barChart.data.datasets[0].data = [...weeklySigned.value];
-    barChart.data.datasets[1].data = [...weeklyPending.value];
-    barChart.update();
-  }
-  if (donutChart) {
-    donutChart.data.datasets[0].data = statusBreakdown.value.map((item) => item.value);
-    donutChart.update();
-  }
-};
-=======
 watch([activityLabels, activityValues], () => {
   if (!lineChart) return;
   lineChart.data.labels = [...activityLabels.value];
@@ -783,7 +624,6 @@ watch(statusBreakdown, () => {
   donutChart.data.datasets[0].data = statusBreakdown.value.map((item) => item.value);
   donutChart.update();
 });
->>>>>>> e054afa1 (Save 1)
 
 onMounted(() => {
   buildLineChart();
@@ -791,11 +631,6 @@ onMounted(() => {
   buildBarChart();
   applyTheme();
 
-<<<<<<< HEAD
-  refreshTimer = window.setInterval(refreshMetrics, 7000);
-
-=======
->>>>>>> e054afa1 (Save 1)
   themeObserver = new MutationObserver(() => {
     applyTheme();
   });
@@ -806,10 +641,6 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-<<<<<<< HEAD
-  if (refreshTimer) window.clearInterval(refreshTimer);
-=======
->>>>>>> e054afa1 (Save 1)
   themeObserver?.disconnect();
   lineChart?.destroy();
   donutChart?.destroy();
@@ -1159,7 +990,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-<<<<<<< HEAD
-=======
 
->>>>>>> e054afa1 (Save 1)

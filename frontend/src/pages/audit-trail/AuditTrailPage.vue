@@ -8,13 +8,8 @@
     <section class="filters-card">
       <div class="filter-select">
         <select v-model="eventFilter" aria-label="Filter by event">
-<<<<<<< HEAD
-          <option v-for="option in eventOptions" :key="option" :value="option">
-            {{ option }}
-=======
           <option v-for="option in eventOptions" :key="option.value" :value="option.value">
             {{ option.label }}
->>>>>>> e054afa1 (Save 1)
           </option>
         </select>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true">
@@ -33,13 +28,8 @@
       </div>
       <div class="filter-select">
         <select v-model="docFilter" aria-label="Filter by document">
-<<<<<<< HEAD
-          <option v-for="option in documentOptions" :key="option" :value="option">
-            {{ option }}
-=======
           <option v-for="option in documentOptions" :key="option.value" :value="option.value">
             {{ option.label }}
->>>>>>> e054afa1 (Save 1)
           </option>
         </select>
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true">
@@ -51,18 +41,6 @@
     <section class="timeline-card">
       <div class="timeline">
         <article v-for="event in visibleEvents" :key="event.id" class="timeline-item">
-<<<<<<< HEAD
-          <div :class="['event-marker', statusClass(event.type)]">
-            <span v-html="eventIcon(event.type)"></span>
-          </div>
-          <div class="event-card">
-            <div class="event-top">
-              <span :class="['event-type', statusClass(event.type)]">{{ event.type }}</span>
-              <span class="event-time">{{ formatDateTime(event.timestamp) }}</span>
-            </div>
-            <h4 class="event-title">{{ event.documentTitle }}</h4>
-            <p class="event-desc">{{ event.description }}</p>
-=======
           <div :class="['event-marker', statusClass(event.eventType)]">
             <span v-html="eventIcon(event.eventType)"></span>
           </div>
@@ -73,38 +51,20 @@
             </div>
             <h4 class="event-title">{{ event.documentTitle }}</h4>
             <p class="event-desc">{{ eventDescription(event) }}</p>
->>>>>>> e054afa1 (Save 1)
             <div class="event-meta">
               <span class="meta-item">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="8" r="4" />
                   <path d="M4 20a8 8 0 0 1 16 0" />
                 </svg>
-<<<<<<< HEAD
-                User: {{ event.user }}
-              </span>
-              <span v-if="event.ip" class="meta-item">
-=======
                 User: {{ eventActor(event) }}
               </span>
               <span v-if="event.ipAddress" class="meta-item">
->>>>>>> e054afa1 (Save 1)
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <rect x="3" y="4" width="18" height="14" rx="2" />
                   <path d="M8 20h8" />
                 </svg>
-<<<<<<< HEAD
-                IP: {{ event.ip }}
-              </span>
-              <span v-if="event.location" class="meta-item">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 22s7-7.5 7-13a7 7 0 1 0-14 0c0 5.5 7 13 7 13Z" />
-                  <circle cx="12" cy="9" r="2.5" />
-                </svg>
-                Location: {{ event.location }}
-=======
                 IP: {{ event.ipAddress }}
->>>>>>> e054afa1 (Save 1)
               </span>
             </div>
           </div>
@@ -124,294 +84,6 @@
 </template>
 
 <script setup lang="ts">
-<<<<<<< HEAD
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-
-type AuditEventType = 'Signed' | 'Viewed' | 'Sent' | 'Downloaded' | 'Created' | 'Expired';
-type DocumentCategory = 'Contracts' | 'NDAs' | 'Agreements';
-
-type AuditEvent = {
-  id: string;
-  type: AuditEventType;
-  documentTitle: string;
-  documentType: DocumentCategory;
-  description: string;
-  user: string;
-  ip?: string;
-  location?: string;
-  timestamp: string;
-};
-
-const eventOptions = ['All Events', 'Signed', 'Viewed', 'Sent', 'Downloaded', 'Created', 'Expired'] as const;
-const rangeOptions = ['Last 7 days', 'Last 30 days', 'Last 90 days', 'All time'] as const;
-const documentOptions = ['All Documents', 'Contracts', 'NDAs', 'Agreements'] as const;
-
-const eventFilter = ref<(typeof eventOptions)[number]>('All Events');
-const rangeFilter = ref<(typeof rangeOptions)[number]>('Last 7 days');
-const docFilter = ref<(typeof documentOptions)[number]>('All Documents');
-
-const auditEvents = ref<AuditEvent[]>([
-  {
-    id: 'evt-1',
-    type: 'Signed',
-    documentTitle: 'Employment Contract - Sarah Miller',
-    documentType: 'Contracts',
-    description: 'Document signed successfully',
-    user: 'Sarah Miller',
-    ip: '192.168.1.100',
-    location: 'San Francisco, CA',
-    timestamp: '2026-01-12T14:45:00',
-  },
-  {
-    id: 'evt-2',
-    type: 'Viewed',
-    documentTitle: 'NDA Agreement - Tech Corp',
-    documentType: 'NDAs',
-    description: 'Document opened for review',
-    user: 'Legal Team',
-    ip: '192.168.1.105',
-    location: 'New York, NY',
-    timestamp: '2026-01-12T14:30:00',
-  },
-  {
-    id: 'evt-3',
-    type: 'Sent',
-    documentTitle: 'Service Agreement - ABC Ltd',
-    documentType: 'Agreements',
-    description: 'Document sent to recipient',
-    user: 'John Doe (You)',
-    ip: '192.168.1.101',
-    location: 'Los Angeles, CA',
-    timestamp: '2026-01-12T13:15:00',
-  },
-  {
-    id: 'evt-4',
-    type: 'Downloaded',
-    documentTitle: 'Partnership Agreement - XYZ Inc',
-    documentType: 'Agreements',
-    description: 'Signed document downloaded',
-    user: 'Admin User',
-    ip: '192.168.1.102',
-    location: 'Chicago, IL',
-    timestamp: '2026-01-12T11:20:00',
-  },
-  {
-    id: 'evt-5',
-    type: 'Signed',
-    documentTitle: 'Vendor Agreement - Supply Co',
-    documentType: 'Contracts',
-    description: 'Document signed successfully',
-    user: 'Vendor Representative',
-    ip: '192.168.1.103',
-    location: 'Austin, TX',
-    timestamp: '2026-01-11T16:50:00',
-  },
-  {
-    id: 'evt-6',
-    type: 'Viewed',
-    documentTitle: 'Freelance Contract - John Doe',
-    documentType: 'Contracts',
-    description: 'Document opened for review',
-    user: 'John Doe',
-    ip: '192.168.1.104',
-    location: 'Seattle, WA',
-    timestamp: '2026-01-11T15:30:00',
-  },
-  {
-    id: 'evt-7',
-    type: 'Created',
-    documentTitle: 'Consulting Agreement - Draft',
-    documentType: 'Agreements',
-    description: 'New document created',
-    user: 'John Doe (You)',
-    ip: '192.168.1.101',
-    location: 'Los Angeles, CA',
-    timestamp: '2026-01-11T14:00:00',
-  },
-  {
-    id: 'evt-8',
-    type: 'Expired',
-    documentTitle: 'Lease Agreement - Property Co',
-    documentType: 'Contracts',
-    description: 'Document signing period expired',
-    user: 'System',
-    timestamp: '2026-01-10T23:59:00',
-  },
-  {
-    id: 'evt-9',
-    type: 'Sent',
-    documentTitle: 'Marketing NDA - Bright Media',
-    documentType: 'NDAs',
-    description: 'Document sent to recipient',
-    user: 'John Doe (You)',
-    ip: '192.168.1.101',
-    location: 'Los Angeles, CA',
-    timestamp: '2026-01-10T10:15:00',
-  },
-  {
-    id: 'evt-10',
-    type: 'Downloaded',
-    documentTitle: 'Agency Agreement - Bluebird',
-    documentType: 'Agreements',
-    description: 'Signed document downloaded',
-    user: 'Agency Admin',
-    ip: '192.168.1.109',
-    location: 'Denver, CO',
-    timestamp: '2026-01-09T18:10:00',
-  },
-  {
-    id: 'evt-11',
-    type: 'Signed',
-    documentTitle: 'Sales Contract - Delta Logistics',
-    documentType: 'Contracts',
-    description: 'Document signed successfully',
-    user: 'Operations Lead',
-    ip: '192.168.1.111',
-    location: 'Phoenix, AZ',
-    timestamp: '2026-01-09T16:05:00',
-  },
-]);
-
-const visibleCount = ref(6);
-let realtimeTimer: number | undefined;
-let lastEventTime = new Date(
-  Math.max(...auditEvents.value.map((event) => new Date(event.timestamp).getTime())),
-);
-
-const filteredEvents = computed(() => {
-  let items = auditEvents.value.slice();
-  if (eventFilter.value !== 'All Events') {
-    items = items.filter((event) => event.type === eventFilter.value);
-  }
-  if (docFilter.value !== 'All Documents') {
-    items = items.filter((event) => event.documentType === docFilter.value);
-  }
-  if (rangeFilter.value !== 'All time') {
-    const days =
-      rangeFilter.value === 'Last 7 days'
-        ? 7
-        : rangeFilter.value === 'Last 30 days'
-          ? 30
-          : 90;
-    const anchor = new Date(
-      Math.max(...auditEvents.value.map((event) => new Date(event.timestamp).getTime())),
-    );
-    const cutoff = new Date(anchor.getTime() - days * 24 * 60 * 60 * 1000);
-    items = items.filter((event) => new Date(event.timestamp) >= cutoff);
-  }
-  return items.sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  );
-});
-
-const visibleEvents = computed(() => filteredEvents.value.slice(0, visibleCount.value));
-const canLoadMore = computed(() => visibleCount.value < filteredEvents.value.length);
-
-watch([eventFilter, rangeFilter, docFilter], () => {
-  visibleCount.value = 6;
-});
-
-const loadMore = () => {
-  visibleCount.value = Math.min(filteredEvents.value.length, visibleCount.value + 4);
-};
-
-const statusClass = (type: AuditEventType) => {
-  switch (type) {
-    case 'Signed':
-      return 'success';
-    case 'Viewed':
-      return 'info';
-    case 'Sent':
-      return 'accent';
-    case 'Downloaded':
-      return 'accent-soft';
-    case 'Created':
-      return 'neutral';
-    default:
-      return 'danger';
-  }
-};
-
-const eventIcon = (type: AuditEventType) => {
-  switch (type) {
-    case 'Signed':
-      return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>';
-    case 'Viewed':
-      return '<svg viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/></svg>';
-    case 'Sent':
-      return '<svg viewBox="0 0 24 24"><path d="m3 11 18-8-6 18-3-7-9-3Z"/><path d="M12 12h9"/></svg>';
-    case 'Downloaded':
-      return '<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
-    case 'Created':
-      return '<svg viewBox="0 0 24 24"><path d="M7 3h6l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M13 3v5h5"/><path d="M9 13h6"/></svg>';
-    default:
-      return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>';
-  }
-};
-
-const formatDateTime = (value: string) => {
-  const date = new Date(value);
-  const datePart = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date);
-  const timePart = new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-  return `${datePart} at ${timePart}`;
-};
-
-const addRealtimeEvent = () => {
-  const docPool = [
-    { title: 'Employment Contract - Sarah Miller', type: 'Contracts' as const },
-    { title: 'NDA Agreement - Tech Corp', type: 'NDAs' as const },
-    { title: 'Service Agreement - ABC Ltd', type: 'Agreements' as const },
-    { title: 'Partnership Agreement - XYZ Inc', type: 'Agreements' as const },
-    { title: 'Vendor Agreement - Supply Co', type: 'Contracts' as const },
-  ];
-  const types: AuditEventType[] = ['Signed', 'Viewed', 'Sent', 'Downloaded', 'Created'];
-  const users = ['John Doe (You)', 'Sarah Miller', 'Legal Team', 'Admin User', 'Vendor Rep'];
-  const locations = ['San Francisco, CA', 'New York, NY', 'Austin, TX', 'Chicago, IL', 'Seattle, WA'];
-  const picked = docPool[Math.floor(Math.random() * docPool.length)];
-  const type = types[Math.floor(Math.random() * types.length)];
-  const nextTime = new Date(lastEventTime.getTime() + (5 + Math.random() * 20) * 60000);
-  lastEventTime = nextTime;
-
-  const descriptionMap: Record<AuditEventType, string> = {
-    Signed: 'Document signed successfully',
-    Viewed: 'Document opened for review',
-    Sent: 'Document sent to recipient',
-    Downloaded: 'Signed document downloaded',
-    Created: 'New document created',
-    Expired: 'Document signing period expired',
-  };
-
-  auditEvents.value.unshift({
-    id: `evt-${Date.now()}`,
-    type,
-    documentTitle: picked.title,
-    documentType: picked.type,
-    description: descriptionMap[type],
-    user: users[Math.floor(Math.random() * users.length)],
-    ip: `192.168.1.${100 + Math.floor(Math.random() * 20)}`,
-    location: locations[Math.floor(Math.random() * locations.length)],
-    timestamp: nextTime.toISOString(),
-  });
-
-  if (auditEvents.value.length > 20) {
-    auditEvents.value.pop();
-  }
-};
-
-onMounted(() => {
-  realtimeTimer = window.setInterval(addRealtimeEvent, 15000);
-});
-
-onBeforeUnmount(() => {
-  if (realtimeTimer) window.clearInterval(realtimeTimer);
-=======
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { listAuditEvents } from '@/features/audit/api';
 import type { AuditEvent } from '@/features/audit/types';
@@ -578,7 +250,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   unsubscribe?.();
->>>>>>> e054afa1 (Save 1)
 });
 </script>
 
@@ -844,7 +515,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-<<<<<<< HEAD
-=======
 
->>>>>>> e054afa1 (Save 1)

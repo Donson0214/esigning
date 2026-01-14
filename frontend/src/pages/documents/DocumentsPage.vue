@@ -5,19 +5,7 @@
         <h2>Documents</h2>
         <p>Manage and track all your documents</p>
       </div>
-<<<<<<< HEAD
-      <button class="btn btn-primary new-btn" type="button" @click="createDocument">
-        <span class="btn-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </span>
-        New Document
-      </button>
-=======
       
->>>>>>> e054afa1 (Save 1)
     </section>
 
     <section class="toolbar">
@@ -251,13 +239,10 @@
                 <p class="label">File size</p>
                 <p class="value">{{ selectedDoc.size }}</p>
               </div>
-<<<<<<< HEAD
-=======
               <div>
                 <p class="label">Active viewers</p>
                 <p class="value">{{ presenceCount(selectedDoc.id) }}</p>
               </div>
->>>>>>> e054afa1 (Save 1)
             </div>
           </div>
           <div class="modal-actions">
@@ -276,14 +261,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-<<<<<<< HEAD
-
-type DocumentStatus = 'Completed' | 'Pending' | 'Signed' | 'Viewed' | 'Expired' | 'Draft';
-=======
 import { useDocuments } from '@/features/documents/composables';
 
 type DocumentStatus = 'Completed' | 'Pending' | 'Signed' | 'Viewed' | 'Expired' | 'Declined' | 'Draft';
->>>>>>> e054afa1 (Save 1)
 
 type DocumentItem = {
   id: string;
@@ -293,156 +273,6 @@ type DocumentItem = {
   status: DocumentStatus;
   recipient: string;
   date: string;
-<<<<<<< HEAD
-};
-
-const documents = ref<DocumentItem[]>([
-  {
-    id: 'doc-1',
-    title: 'Employment Contract - Sarah Miller',
-    size: '2.4 MB',
-    type: 'Contract',
-    status: 'Completed',
-    recipient: 'sarah.miller@email.com',
-    date: '2026-01-12',
-  },
-  {
-    id: 'doc-2',
-    title: 'NDA Agreement - Tech Corp',
-    size: '1.8 MB',
-    type: 'NDA',
-    status: 'Pending',
-    recipient: 'legal@techcorp.com',
-    date: '2026-01-11',
-  },
-  {
-    id: 'doc-3',
-    title: 'Service Agreement - ABC Ltd',
-    size: '3.2 MB',
-    type: 'Agreement',
-    status: 'Viewed',
-    recipient: 'contracts@abc.com',
-    date: '2026-01-10',
-  },
-  {
-    id: 'doc-4',
-    title: 'Partnership Agreement - XYZ Inc',
-    size: '2.1 MB',
-    type: 'Agreement',
-    status: 'Signed',
-    recipient: 'admin@xyz.com',
-    date: '2026-01-09',
-  },
-  {
-    id: 'doc-5',
-    title: 'Lease Agreement - Property Co',
-    size: '4.5 MB',
-    type: 'Contract',
-    status: 'Expired',
-    recipient: 'lease@propertyco.com',
-    date: '2026-01-08',
-  },
-  {
-    id: 'doc-6',
-    title: 'Consulting Agreement - Draft',
-    size: '1.2 MB',
-    type: 'Agreement',
-    status: 'Draft',
-    recipient: 'Not sent',
-    date: '2026-01-07',
-  },
-  {
-    id: 'doc-7',
-    title: 'Vendor Agreement - Supply Co',
-    size: '2.8 MB',
-    type: 'Contract',
-    status: 'Completed',
-    recipient: 'vendor@supplyco.com',
-    date: '2026-01-06',
-  },
-  {
-    id: 'doc-8',
-    title: 'Freelance Contract - John Doe',
-    size: '1.5 MB',
-    type: 'Contract',
-    status: 'Signed',
-    recipient: 'john.doe@freelance.com',
-    date: '2026-01-05',
-  },
-  {
-    id: 'doc-9',
-    title: 'Marketing NDA - Bright Media',
-    size: '1.1 MB',
-    type: 'NDA',
-    status: 'Viewed',
-    recipient: 'legal@brightmedia.com',
-    date: '2026-01-04',
-  },
-  {
-    id: 'doc-10',
-    title: 'HR Policy Update - Orion Labs',
-    size: '2.0 MB',
-    type: 'Agreement',
-    status: 'Pending',
-    recipient: 'hr@orionlabs.com',
-    date: '2026-01-03',
-  },
-  {
-    id: 'doc-11',
-    title: 'Sales Contract - Delta Logistics',
-    size: '3.6 MB',
-    type: 'Contract',
-    status: 'Completed',
-    recipient: 'sales@delta.com',
-    date: '2026-01-02',
-  },
-  {
-    id: 'doc-12',
-    title: 'Agency Agreement - Bluebird',
-    size: '2.3 MB',
-    type: 'Agreement',
-    status: 'Signed',
-    recipient: 'hello@bluebird.com',
-    date: '2026-01-01',
-  },
-  {
-    id: 'doc-13',
-    title: 'Contract Renewal - Silverline',
-    size: '2.9 MB',
-    type: 'Contract',
-    status: 'Completed',
-    recipient: 'ops@silverline.com',
-    date: '2025-12-31',
-  },
-  {
-    id: 'doc-14',
-    title: 'Procurement NDA - Vertex',
-    size: '1.6 MB',
-    type: 'NDA',
-    status: 'Expired',
-    recipient: 'procurement@vertex.com',
-    date: '2025-12-30',
-  },
-  {
-    id: 'doc-15',
-    title: 'Project SOW - Nimbus Tech',
-    size: '2.7 MB',
-    type: 'Agreement',
-    status: 'Viewed',
-    recipient: 'pm@nimbus.tech',
-    date: '2025-12-29',
-  },
-  {
-    id: 'doc-16',
-    title: 'Draft Proposal - Internal',
-    size: '0.9 MB',
-    type: 'Agreement',
-    status: 'Draft',
-    recipient: 'Not sent',
-    date: '2025-12-28',
-  },
-]);
-=======
   fileUrl: string;
   signedFileUrl?: string | null;
 };
@@ -464,7 +294,6 @@ const documentRows = computed<DocumentItem[]>(() =>
     signedFileUrl: doc.signedFileUrl ?? null,
   })),
 );
->>>>>>> e054afa1 (Save 1)
 
 const statusOptions = [
   'All Status',
@@ -473,10 +302,7 @@ const statusOptions = [
   'Signed',
   'Viewed',
   'Expired',
-<<<<<<< HEAD
-=======
   'Declined',
->>>>>>> e054afa1 (Save 1)
   'Draft',
 ] as const;
 
@@ -501,11 +327,7 @@ const activeFilterCount = computed(() => {
 });
 
 const filteredDocuments = computed(() => {
-<<<<<<< HEAD
-  let result = documents.value.slice();
-=======
   let result = documentRows.value.slice();
->>>>>>> e054afa1 (Save 1)
   const search = searchQuery.value.toLowerCase();
   if (search) {
     result = result.filter((doc) =>
@@ -558,8 +380,6 @@ const clearFilters = () => {
   sortOrder.value = 'newest';
 };
 
-<<<<<<< HEAD
-=======
 const mapStatus = (status: string): DocumentStatus => {
   switch (status) {
     case 'COMPLETED':
@@ -579,7 +399,6 @@ const mapStatus = (status: string): DocumentStatus => {
   }
 };
 
->>>>>>> e054afa1 (Save 1)
 const statusClass = (status: DocumentStatus) => {
   switch (status) {
     case 'Completed':
@@ -590,11 +409,8 @@ const statusClass = (status: DocumentStatus) => {
       return 'success';
     case 'Viewed':
       return 'info';
-<<<<<<< HEAD
-=======
     case 'Declined':
       return 'danger';
->>>>>>> e054afa1 (Save 1)
     case 'Expired':
       return 'danger';
     default:
@@ -623,17 +439,6 @@ const viewDocument = (doc: DocumentItem) => {
 
 const downloadDocument = (doc: DocumentItem) => {
   menuOpenId.value = null;
-<<<<<<< HEAD
-  const blob = new Blob([`Document: ${doc.title}`], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${doc.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-=======
   const url = doc.signedFileUrl || doc.fileUrl;
   if (!url) return;
   const link = document.createElement('a');
@@ -643,7 +448,6 @@ const downloadDocument = (doc: DocumentItem) => {
   document.body.appendChild(link);
   link.click();
   link.remove();
->>>>>>> e054afa1 (Save 1)
 };
 
 const removeDocument = (id: string) => {
@@ -652,21 +456,7 @@ const removeDocument = (id: string) => {
 };
 
 const createDocument = () => {
-<<<<<<< HEAD
-  const now = new Date().toISOString().slice(0, 10);
-  documents.value.unshift({
-    id: `doc-${Date.now()}`,
-    title: 'New Document',
-    size: '0.4 MB',
-    type: 'Contract',
-    status: 'Draft',
-    recipient: 'Not sent',
-    date: now,
-  });
-  currentPage.value = 1;
-=======
   void refresh();
->>>>>>> e054afa1 (Save 1)
 };
 
 const prevPage = () => {

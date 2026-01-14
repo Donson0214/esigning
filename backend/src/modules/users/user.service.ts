@@ -3,9 +3,6 @@ import { prisma } from '../../config/prisma';
 export async function getUserById(id: string) {
   return prisma.user.findUnique({
     where: { id },
-<<<<<<< HEAD
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
-=======
     select: {
       id: true,
       email: true,
@@ -37,6 +34,5 @@ export async function updateUser(
       photoUrl: true,
       createdAt: true,
     },
->>>>>>> e054afa1 (Save 1)
   });
 }

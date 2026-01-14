@@ -46,10 +46,6 @@
           <p class="card-title">Sign in</p>
           <p class="helper">Enter your credentials to access your account.</p>
         </div>
-<<<<<<< HEAD
-        <p v-if="!firebaseReady" class="warning">{{ firebaseConfigMessage }}</p>
-=======
->>>>>>> e054afa1 (Save 1)
         <form class="form" @submit.prevent="handleLogin">
           <div class="field">
             <label class="label" for="email">Email address</label>
@@ -102,11 +98,7 @@
             <RouterLink class="link" to="/forgot-password">Forgot password?</RouterLink>
           </div>
           <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
-<<<<<<< HEAD
-          <button class="btn btn-primary" type="submit" :disabled="isSubmitting || !firebaseReady">
-=======
           <button class="btn btn-primary" type="submit" :disabled="isSubmitting">
->>>>>>> e054afa1 (Save 1)
             {{ isSubmitting ? 'Signing in...' : 'Sign in' }}
           </button>
         </form>
@@ -115,11 +107,7 @@
           <button
             class="btn btn-outline"
             type="button"
-<<<<<<< HEAD
-            :disabled="!firebaseReady || isGoogleSubmitting"
-=======
             :disabled="isGoogleSubmitting"
->>>>>>> e054afa1 (Save 1)
             @click="openGoogle"
           >
             <span class="social-icon google" aria-hidden="true">
@@ -154,23 +142,6 @@
     </template>
   </AuthLayout>
 
-<<<<<<< HEAD
-  <GoogleOrgModal
-    v-model="googleModalOpen"
-    :email="googleEmail"
-    @complete="handleGoogleComplete"
-  />
-</template>
-
-<script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { onAuthStateChanged } from 'firebase/auth';
-import { RouterLink, useRouter } from 'vue-router';
-import AuthLayout from '@/layouts/AuthLayout.vue';
-import GoogleOrgModal from '@/features/auth/components/GoogleOrgModal.vue';
-import { googleAuth, login, saveOrganization } from '@/features/auth/api';
-import { getFirebase, hasFirebaseConfig } from '@/shared/lib/firebase';
-=======
 </template>
 
 <script setup lang="ts">
@@ -178,7 +149,6 @@ import { onMounted, reactive, ref } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { googleAuth, login } from '@/features/auth/api';
->>>>>>> e054afa1 (Save 1)
 
 const form = reactive({
   email: '',
@@ -190,53 +160,6 @@ const showPassword = ref(false);
 const isSubmitting = ref(false);
 const isGoogleSubmitting = ref(false);
 const errorMessage = ref('');
-<<<<<<< HEAD
-const googleModalOpen = ref(false);
-const googleUserId = ref<string | null>(null);
-const googleEmail = ref('');
-const router = useRouter();
-const firebaseReady = hasFirebaseConfig();
-const firebaseConfigMessage =
-  'Firebase is not configured. Add your VITE_FIREBASE_* keys to frontend/.env and restart the dev server.';
-let authUnsub: (() => void) | null = null;
-
-const getAuthErrorMessage = (error: unknown, fallback: string) => {
-  const code = (error as { code?: string })?.code ?? '';
-  if (error instanceof Error && error.message.startsWith('Firebase config missing')) {
-    return firebaseConfigMessage;
-  }
-  switch (code) {
-    case 'auth/invalid-api-key':
-      return 'Firebase API key is invalid. Check VITE_FIREBASE_API_KEY in frontend/.env.';
-    case 'auth/invalid-email':
-      return 'Email address is invalid.';
-    case 'auth/user-not-found':
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Email or password is incorrect.';
-    case 'auth/too-many-requests':
-      return 'Too many attempts. Please wait a moment and try again.';
-    case 'auth/network-request-failed':
-      return 'Network error. Check your connection and try again.';
-    case 'auth/operation-not-allowed':
-      return 'Email/password sign-in is disabled in Firebase.';
-    case 'auth/popup-blocked':
-      return 'Popup blocked. Allow popups and try again.';
-    case 'auth/popup-closed-by-user':
-    case 'auth/cancelled-popup-request':
-      return 'Google sign-in was cancelled.';
-    case 'auth/unauthorized-domain':
-      return 'This domain is not authorized for Google sign-in.';
-    case 'permission-denied':
-      return 'Firestore rules blocked profile access. Allow users to read/write their own profile.';
-    case 'failed-precondition':
-      return 'Firestore is not enabled for this project.';
-    case 'unavailable':
-      return 'Firestore is unavailable. Try again shortly.';
-    default:
-      return error instanceof Error && error.message ? error.message : fallback;
-  }
-=======
 const router = useRouter();
 
 const getAuthErrorMessage = (error: unknown, fallback: string) => {
@@ -245,18 +168,10 @@ const getAuthErrorMessage = (error: unknown, fallback: string) => {
     (error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
     (error instanceof Error ? error.message : '');
   return message || fallback;
->>>>>>> e054afa1 (Save 1)
 };
 
 const handleLogin = async () => {
   errorMessage.value = '';
-<<<<<<< HEAD
-  if (!firebaseReady) {
-    errorMessage.value = firebaseConfigMessage;
-    return;
-  }
-=======
->>>>>>> e054afa1 (Save 1)
   isSubmitting.value = true;
   try {
     await login({ email: form.email, password: form.password });
@@ -270,25 +185,9 @@ const handleLogin = async () => {
 
 const openGoogle = async () => {
   errorMessage.value = '';
-<<<<<<< HEAD
-  if (!firebaseReady) {
-    errorMessage.value = firebaseConfigMessage;
-    return;
-  }
-  isGoogleSubmitting.value = true;
-  try {
-    const result = await googleAuth();
-    if (result.needsOrganization) {
-      googleUserId.value = result.user.uid;
-      googleEmail.value = result.user.email ?? '';
-      googleModalOpen.value = true;
-      return;
-    }
-=======
   isGoogleSubmitting.value = true;
   try {
     await googleAuth();
->>>>>>> e054afa1 (Save 1)
     router.push('/app/dashboard');
   } catch (error: any) {
     errorMessage.value = error?.message ?? 'Google sign-in failed.';
@@ -297,40 +196,10 @@ const openGoogle = async () => {
   }
 };
 
-<<<<<<< HEAD
-const handleGoogleComplete = async (payload: { organization: string }) => {
-  if (!googleUserId.value) {
-    errorMessage.value = 'Google sign-in session missing.';
-    return;
-  }
-  try {
-    await saveOrganization(googleUserId.value, payload.organization);
-    router.push('/app/dashboard');
-  } catch (error: any) {
-    errorMessage.value = getAuthErrorMessage(error, 'Google sign-in failed.');
-  } finally {
-    googleModalOpen.value = false;
-  }
-};
-
-onMounted(() => {
-  if (!firebaseReady) return;
-  const { auth } = getFirebase();
-  authUnsub = onAuthStateChanged(auth, (user) => {
-    if (user) {
-      router.replace('/app/dashboard');
-    }
-  });
-});
-
-onBeforeUnmount(() => {
-  authUnsub?.();
-=======
 onMounted(() => {
   if (localStorage.getItem('auth_token')) {
     router.replace('/app/dashboard');
   }
->>>>>>> e054afa1 (Save 1)
 });
 </script>
 

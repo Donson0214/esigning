@@ -75,11 +75,7 @@
         </div>
       </div>
       <div class="notifications">
-<<<<<<< HEAD
-        <button class="icon-btn" type="button">
-=======
         <button class="icon-btn" type="button" @click="notificationsOpen = !notificationsOpen">
->>>>>>> e054afa1 (Save 1)
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path
               d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"
@@ -87,12 +83,6 @@
             <path d="M13.7 21a2 2 0 0 1-3.4 0" />
           </svg>
         </button>
-<<<<<<< HEAD
-        <span class="badge">2</span>
-      </div>
-      <div class="profile" @click="profileOpen = !profileOpen">
-        <span class="avatar">{{ userInitials }}</span>
-=======
         <span v-if="unreadCount" class="badge">{{ unreadCount }}</span>
         <div v-if="notificationsOpen" class="notification-card">
           <div class="notification-head">
@@ -156,7 +146,6 @@
           <img v-if="userAvatar" :src="userAvatar" alt="Profile" />
           <span v-else>{{ userInitials }}</span>
         </span>
->>>>>>> e054afa1 (Save 1)
         <div class="profile-info">
           <p class="profile-name">{{ userName }}</p>
           <p class="profile-role">{{ userRole }}</p>
@@ -167,14 +156,10 @@
         <div v-if="profileOpen" class="profile-menu">
           <div class="profile-card">
             <div class="profile-card-head">
-<<<<<<< HEAD
-              <span class="avatar avatar-lg">{{ userInitials }}</span>
-=======
               <span class="avatar avatar-lg">
                 <img v-if="userAvatar" :src="userAvatar" alt="Profile" />
                 <span v-else>{{ userInitials }}</span>
               </span>
->>>>>>> e054afa1 (Save 1)
               <div>
                 <p class="profile-name-lg">{{ userName }}</p>
                 <p class="profile-email">{{ userEmail }}</p>
@@ -231,13 +216,6 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-<<<<<<< HEAD
-import { signOut } from 'firebase/auth';
-import { useRouter } from 'vue-router';
-import { useTheme } from '@/app/providers/theme';
-import { getFirebase, hasFirebaseConfig } from '@/shared/lib/firebase';
-import { useAuthProfile } from '@/features/auth/useAuthProfile';
-=======
 import { useRouter } from 'vue-router';
 import { useTheme } from '@/app/providers/theme';
 import { disconnectSocket } from '@/shared/lib/socket';
@@ -248,7 +226,6 @@ import type { NotificationEventType } from '@shared/events';
 import { useNotifications } from '@/features/notifications/useNotifications';
 import { mapNotificationMeta } from '@/features/notifications/types';
 import { formatRelativeTime } from '@/shared/lib/time';
->>>>>>> e054afa1 (Save 1)
 
 defineProps<{ title: string }>();
 defineEmits<{ (event: 'toggle-mobile'): void }>();
@@ -257,9 +234,6 @@ const router = useRouter();
 const { themeMode, setTheme } = useTheme();
 const themeOpen = ref(false);
 const profileOpen = ref(false);
-<<<<<<< HEAD
-const { displayName, email, initials, organization, role } = useAuthProfile();
-=======
 const notificationsOpen = ref(false);
 const { displayName, email, initials, avatarUrl, organization, role } = useAuthProfile();
 const { notifications, unreadCount, markAllRead, markRead, clear } = useNotifications();
@@ -267,15 +241,11 @@ const { notifications, unreadCount, markAllRead, markRead, clear } = useNotifica
 const notificationPreview = computed(() => notifications.value.slice(0, 4));
 const notificationIcon = (eventType: NotificationEventType) => mapNotificationMeta(eventType).icon;
 const notificationTone = (eventType: NotificationEventType) => mapNotificationMeta(eventType).tone;
->>>>>>> e054afa1 (Save 1)
 
 const userName = computed(() => displayName.value);
 const userEmail = computed(() => email.value || 'Not signed in');
 const userInitials = computed(() => initials.value);
-<<<<<<< HEAD
-=======
 const userAvatar = computed(() => avatarUrl.value);
->>>>>>> e054afa1 (Save 1)
 const userOrganization = computed(() => organization.value);
 const userRole = computed(() => role.value);
 
@@ -289,11 +259,6 @@ const goSettings = () => {
   router.push('/app/settings');
 };
 
-<<<<<<< HEAD
-const logout = async () => {
-  profileOpen.value = false;
-  localStorage.removeItem('auth_token');
-=======
 const goNotifications = () => {
   notificationsOpen.value = false;
   router.push('/app/notifications');
@@ -320,23 +285,16 @@ const logout = async () => {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('auth:updated'));
   }
->>>>>>> e054afa1 (Save 1)
   if (hasFirebaseConfig()) {
     try {
       const { auth } = getFirebase();
       await signOut(auth);
     } catch {
-<<<<<<< HEAD
-      // ignore sign-out errors
-    }
-  }
-=======
       // ignore logout failures
     }
   }
   disconnectSocket();
   clear();
->>>>>>> e054afa1 (Save 1)
   router.push('/login');
 };
 </script>
@@ -500,8 +458,6 @@ const logout = async () => {
   place-items: center;
 }
 
-<<<<<<< HEAD
-=======
 .notification-card {
   position: absolute;
   top: 54px;
@@ -648,7 +604,6 @@ const logout = async () => {
   cursor: pointer;
 }
 
->>>>>>> e054afa1 (Save 1)
 .profile {
   display: flex;
   align-items: center;
@@ -673,8 +628,6 @@ const logout = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-<<<<<<< HEAD
-=======
   overflow: hidden;
 }
 
@@ -683,7 +636,6 @@ const logout = async () => {
   height: 100%;
   object-fit: cover;
   display: block;
->>>>>>> e054afa1 (Save 1)
 }
 
 .profile-info {

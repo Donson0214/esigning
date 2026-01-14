@@ -1,13 +1,5 @@
 import bcrypt from 'bcrypt';
 import { prisma } from '../../config/prisma';
-<<<<<<< HEAD
-import { UserRole } from '@prisma/client';
-import type { LoginInput, RegisterInput } from './auth.types';
-import { createHttpError } from '../../utils/http-error.util';
-import { signAccessToken } from '../../utils/token.util';
-
-function buildAuthResponse(user: { id: string; email: string; name: string | null; role: UserRole }) {
-=======
 import { UserRole, type Prisma } from '@prisma/client';
 import type { FirebaseAuthInput, LoginInput, RegisterInput } from './auth.types';
 import { createHttpError } from '../../utils/http-error.util';
@@ -23,7 +15,6 @@ function buildAuthResponse(user: {
   jobTitle?: string | null;
   photoUrl?: string | null;
 }) {
->>>>>>> e054afa1 (Save 1)
   const token = signAccessToken({
     sub: user.id,
     email: user.email,
@@ -49,11 +40,7 @@ export async function register(input: RegisterInput) {
       password: hashedPassword,
       name: input.name ?? null,
     },
-<<<<<<< HEAD
-    select: { id: true, email: true, name: true, role: true },
-=======
     select: { id: true, email: true, name: true, role: true, jobTitle: true, photoUrl: true },
->>>>>>> e054afa1 (Save 1)
   });
 
   return buildAuthResponse(user);
@@ -71,9 +58,6 @@ export async function login(input: LoginInput) {
     throw createHttpError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
   }
 
-<<<<<<< HEAD
-  return buildAuthResponse({ id: user.id, email: user.email, name: user.name, role: user.role });
-=======
   return buildAuthResponse({
     id: user.id,
     email: user.email,
@@ -130,5 +114,4 @@ export async function firebaseLogin(input: FirebaseAuthInput) {
   });
 
   return buildAuthResponse(user);
->>>>>>> e054afa1 (Save 1)
 }
