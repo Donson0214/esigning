@@ -5,11 +5,15 @@ const env_1 = require("./config/env");
 const logger_util_1 = require("./utils/logger.util");
 const prisma_1 = require("./config/prisma");
 const app_1 = require("./app");
+const http_1 = require("http");
+const socket_1 = require("./realtime/socket");
 async function startServer() {
     // quick DB check
     await prisma_1.prisma.$queryRaw `SELECT 1`;
     const app = (0, app_1.createApp)();
-    const server = app.listen(env_1.env.port, () => {
+    const server = (0, http_1.createServer)(app);
+    (0, socket_1.initSocketServer)(server);
+    server.listen(env_1.env.port, () => {
         logger_util_1.logger.info({ port: env_1.env.port }, 'Server listening');
     });
     const shutdown = async () => {

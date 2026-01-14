@@ -49,6 +49,7 @@ async function viewSigningSession(req, res, next) {
         const session = await signingService.viewSigningSession(token, {
             ipAddress: req.ip,
             userAgent: req.get('user-agent') ?? undefined,
+            correlationId: req.correlationId,
         });
         res.json(session);
     }
@@ -66,6 +67,7 @@ async function submitSigning(req, res, next) {
         const result = await signingService.submitSigning(token, payload, {
             ipAddress: req.ip,
             userAgent: req.get('user-agent') ?? undefined,
+            correlationId: req.correlationId,
         });
         res.json(result);
     }

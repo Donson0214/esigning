@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type Notification } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { createEvent, type EventActor, type NotificationSummary } from '../../shared/events';
 import { emitUserEvent } from '../../realtime/socket';
@@ -215,9 +215,7 @@ export async function dispatchNotification(input: NotificationInput) {
   }
 
   const shouldPersist = notifyEnabled && (prefs.inAppEnabled || prefs.realtimeEnabled);
-  let notification: null | Prisma.NotificationGetPayload<{
-    include: { deliveries: true };
-  }> = null;
+  let notification: Notification | null = null;
 
   if (shouldPersist) {
     try {
@@ -230,14 +228,13 @@ export async function dispatchNotification(input: NotificationInput) {
           title: input.title,
           message: input.message,
           link: input.link,
-          payload: input.payload ?? {},
+          payload: (input.payload ?? {}) as Prisma.InputJsonValue,
           idempotencyKey: input.idempotencyKey,
           ...toActor(input.actor),
           deliveries: {
             create: prefs.inAppEnabled ? [{ channel: 'IN_APP', status: 'SENT', deliveredAt: new Date() }] : [],
           },
         },
-        include: { deliveries: true },
       });
     } catch (err) {
       if (

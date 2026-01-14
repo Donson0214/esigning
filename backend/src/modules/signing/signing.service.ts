@@ -11,7 +11,7 @@ import { createEvent } from '../../shared/events';
 import { emitEvent } from '../../realtime/socket';
 import { env } from '../../config/env';
 import { dispatchNotification } from '../notifications/notification.service';
-import { buildCloudinaryAccessUrl } from '../../utils/cloudinary.util';
+import { createSignedUrl } from '../../utils/supabase.util';
 import {
   applySignature as applySignatureFlow,
   completeDocument as completeDocumentFlow,
@@ -160,11 +160,7 @@ export async function viewSigningSession(token: string, meta: RequestMeta) {
     document: {
       id: signer.document.id,
       title: signer.document.title,
-      fileUrl: buildCloudinaryAccessUrl({
-        url: signer.document.fileUrl,
-        publicId: signer.document.filePublicId,
-        fileName: signer.document.fileName,
-      }),
+      fileUrl: await createSignedUrl(signer.document.fileUrl).catch(() => signer.document.fileUrl),
       status: signer.document.status,
     },
     fields: signer.fields,

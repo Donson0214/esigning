@@ -2,6 +2,7 @@ import {
   AuditActorType,
   AuditEventType,
   DocumentStatus,
+  FieldStatus,
   SignerStatus,
   SignatureArtifactType,
   SigningSessionStatus,
@@ -13,9 +14,8 @@ import { createHttpError } from '../../utils/http-error.util';
 import { hashBuffer, hashString } from '../../utils/hash.util';
 import { computeManifestHash } from '../../utils/manifest.util';
 import { parseDataUrl } from '../../utils/signature.util';
-import { buildCloudinaryAccessUrl, uploadBufferToCloudinary } from '../../utils/cloudinary.util';
+import { downloadStoredFile, uploadBufferToSupabase } from '../../utils/supabase.util';
 import { applySignatureToPdf } from '../../utils/pdf-signature.util';
-import { fetchBuffer } from '../../utils/http.util';
 import { hmacSha256Hex } from '../../utils/crypto.util';
 import { generateCertificatePdf } from '../../utils/pdf.util';
 import { AUDIT_EVENT_LABELS } from '../audit/audit.constants';
@@ -34,6 +34,25 @@ type RequestMeta = {
 type ManifestFieldInput = {
   fieldId: string;
   value: string;
+};
+
+type NormalizedRect = { x: number; y: number; width: number; height: number };
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+const toNormalizedRect = (options: Prisma.JsonValue | null | undefined): NormalizedRect | null => {
+  if (!options || typeof options !== 'object') return null;
+  const normalized = (options as { normalized?: { x?: unknown; y?: unknown; width?: unknown; height?: unknown } })
+    .normalized;
+  if (!normalized) return null;
+  const { x, y, width, height } = normalized;
+  if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(width) || !isFiniteNumber(height)) {
+    return null;
+  }
+  if (x < 0 || y < 0 || width <= 0 || height <= 0 || x > 1 || y > 1 || width > 1 || height > 1) {
+    return null;
+  }
+  return { x, y, width, height };
 };
 
 function ensureSignerInOrder(documentId: string, signerId: string) {
@@ -77,12 +96,7 @@ export async function precomputeDocumentHash(ownerId: string, documentId: string
   if (!document) {
     throw createHttpError(404, 'DOCUMENT_NOT_FOUND', 'Document not found');
   }
-  const accessUrl = buildCloudinaryAccessUrl({
-    url: document.fileUrl,
-    publicId: document.filePublicId,
-    fileName: document.fileName,
-  });
-  const buffer = await fetchBuffer(accessUrl);
+  const buffer = await downloadStoredFile(document.fileUrl || document.filePublicId);
   const hash = hashBuffer(buffer);
   const computedAt = new Date();
 
@@ -274,6 +288,7 @@ export async function submitManifest(params: {
         width: field.width,
         height: field.height,
         value: input.value,
+        normalized: toNormalizedRect(field.options),
       };
     })
     .sort((a, b) => a.fieldId.localeCompare(b.fieldId));
@@ -298,7 +313,7 @@ export async function submitManifest(params: {
     const updatedSession = await tx.signingSession.update({
       where: { id: session.id },
       data: {
-        manifestJson: manifest,
+        manifestJson: manifest as Prisma.InputJsonValue,
         manifestHash,
         manifestAlgorithm: 'SHA-256',
         manifestCreatedAt: new Date(),
@@ -310,7 +325,7 @@ export async function submitManifest(params: {
         where: { id: field.fieldId },
         data: {
           value: field.value,
-          status: 'FILLED',
+          status: FieldStatus.FILLED,
         },
       });
     }
@@ -420,12 +435,13 @@ export async function uploadSignatureArtifact(params: {
       throw createHttpError(400, 'INVALID_SIGNATURE', 'Unsupported signature image type');
     }
     artifactHash = hashBuffer(parsed.buffer);
-    const upload = await uploadBufferToCloudinary(parsed.buffer, {
-      folder: 'esigning/signatures',
-      fileName: `${signer.documentId}-${signer.id}-signature`,
-      resourceType: 'auto',
+    const extension = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? '.jpg' : '.png';
+    const upload = await uploadBufferToSupabase(parsed.buffer, {
+      folder: 'signatures',
+      fileName: `${signer.documentId}-${signer.id}-signature${extension}`,
+      contentType: mimeType,
     });
-    artifactUrl = upload.url;
+    artifactUrl = upload.path;
   }
 
   const updated = await prisma.signingSession.update({
@@ -542,30 +558,25 @@ export async function applySignature(params: {
       width: number;
       height: number;
       value: string;
+      normalized?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      } | null;
     }>;
   };
 
   const fieldsToApply = manifest.fields;
-  const pdfSource =
-    signer.document.signedFileUrl && signer.document.signedFilePublicId
-      ? buildCloudinaryAccessUrl({
-          url: signer.document.signedFileUrl,
-          publicId: signer.document.signedFilePublicId,
-          fileName: signer.document.fileName,
-        })
-      : buildCloudinaryAccessUrl({
-          url: signer.document.fileUrl,
-          publicId: signer.document.filePublicId,
-          fileName: signer.document.fileName,
-        });
-  const pdfBuffer = await fetchBuffer(pdfSource);
+  const pdfSource = signer.document.signedFileUrl || signer.document.fileUrl || signer.document.filePublicId;
+  const pdfBuffer = await downloadStoredFile(pdfSource);
 
   let signatureImageParsed = null;
   if (session.signatureArtifactType !== SignatureArtifactType.TYPED) {
     if (!session.signatureArtifactUrl) {
       throw createHttpError(400, 'SIGNATURE_MISSING', 'Signature artifact URL missing');
     }
-    const imageBuffer = await fetchBuffer(session.signatureArtifactUrl);
+    const imageBuffer = await downloadStoredFile(session.signatureArtifactUrl);
     const artifactHash = hashBuffer(imageBuffer);
     if (artifactHash !== session.signatureArtifactHash) {
       throw createHttpError(409, 'MANIFEST_MISMATCH', 'Signature artifact hash mismatch');
@@ -585,10 +596,10 @@ export async function applySignature(params: {
   const postHash = hashBuffer(signedBuffer);
   const postComputedAt = new Date();
 
-  const upload = await uploadBufferToCloudinary(signedBuffer, {
-    folder: 'esigning/signed',
+  const upload = await uploadBufferToSupabase(signedBuffer, {
+    folder: 'signed',
     fileName: `${signer.document.title}-signed.pdf`,
-    resourceType: 'raw',
+    contentType: 'application/pdf',
   });
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -615,7 +626,7 @@ export async function applySignature(params: {
         where: { id: field.fieldId },
         data: {
           value: field.value,
-          status: shouldSign ? 'SIGNED' : 'FILLED',
+          status: shouldSign ? FieldStatus.SIGNED : FieldStatus.FILLED,
         },
       });
     }
@@ -632,8 +643,8 @@ export async function applySignature(params: {
     const updated = await tx.document.update({
       where: { id: signer.documentId },
       data: {
-        signedFileUrl: upload.url,
-        signedFilePublicId: upload.publicId,
+        signedFileUrl: upload.path,
+        signedFilePublicId: upload.path,
         postHash,
         postHashAlgorithm: 'SHA-256',
         postHashComputedAt: postComputedAt,
@@ -887,10 +898,10 @@ export async function completeDocument(ownerId: string, documentId: string, meta
     auditSummary,
   });
 
-  const upload = await uploadBufferToCloudinary(certificateBuffer, {
-    folder: 'esigning/certificates',
+  const upload = await uploadBufferToSupabase(certificateBuffer, {
+    folder: 'certificates',
     fileName: `${document.title}-certificate.pdf`,
-    resourceType: 'raw',
+    contentType: 'application/pdf',
   });
 
   const certificateHash = hashBuffer(certificateBuffer);
@@ -909,8 +920,8 @@ export async function completeDocument(ownerId: string, documentId: string, meta
     await tx.certificate.upsert({
       where: { documentId: document.id },
       update: {
-        url: upload.url,
-        publicId: upload.publicId,
+        url: upload.path,
+        publicId: upload.path,
         hash: certificateHash,
         summary: {
           documentId: document.id,
@@ -926,8 +937,8 @@ export async function completeDocument(ownerId: string, documentId: string, meta
       },
       create: {
         documentId: document.id,
-        url: upload.url,
-        publicId: upload.publicId,
+        url: upload.path,
+        publicId: upload.path,
         hash: certificateHash,
         summary: {
           documentId: document.id,

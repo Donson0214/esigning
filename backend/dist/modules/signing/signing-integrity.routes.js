@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.signingIntegrityRoutes = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const signing_auth_middleware_1 = require("../../middlewares/signing-auth.middleware");
+const rate_limit_middleware_1 = require("../../middlewares/rate-limit.middleware");
+const signing_integrity_controller_1 = require("./signing-integrity.controller");
+exports.signingIntegrityRoutes = (0, express_1.Router)();
+exports.signingIntegrityRoutes.post('/:docId/hash/precompute', auth_middleware_1.requireAuth, signing_integrity_controller_1.precomputeHash);
+exports.signingIntegrityRoutes.post('/:docId/signing-sessions', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.createSigningSession);
+exports.signingIntegrityRoutes.post('/:docId/manifest', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.submitManifest);
+exports.signingIntegrityRoutes.post('/:docId/signature', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.uploadSignature);
+exports.signingIntegrityRoutes.post('/:docId/apply-signature', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.applySignature);
+exports.signingIntegrityRoutes.post('/:docId/complete', auth_middleware_1.requireAuth, signing_integrity_controller_1.completeDocument);
+exports.signingIntegrityRoutes.get('/:docId/audit', auth_middleware_1.requireAuth, signing_integrity_controller_1.getAuditReport);

@@ -7,6 +7,9 @@ import {
 } from './document.types';
 import * as documentService from './document.service';
 import { getAuditReport } from '../signing/signing-integrity.service';
+import { createSignedUrl, downloadStoredFile } from '../../utils/supabase.util';
+
+const sanitizeFileName = (value: string) => value.replace(/["\\\r\n]/g, '_');
 
 function getParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -51,6 +54,42 @@ export async function getDocument(req: Request, res: Response, next: NextFunctio
     }
     const document = await documentService.getDocument(req.user!.id, documentId);
     res.json(document);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getDocumentPreviewUrl(req: Request, res: Response, next: NextFunction) {
+  try {
+    const documentId = getParam(req.params.id);
+    if (!documentId) {
+      return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+    }
+    const document = await documentService.getDocument(req.user!.id, documentId);
+    const url = await createSignedUrl(document.filePublicId || document.fileUrl);
+    if (!url) {
+      return res.status(404).json({ error: 'PREVIEW_UNAVAILABLE' });
+    }
+    res.json({ url });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getDocumentFile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const documentId = getParam(req.params.id);
+    if (!documentId) {
+      return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+    }
+    const document = await documentService.getDocument(req.user!.id, documentId);
+    const buffer = await downloadStoredFile(document.filePublicId || document.fileUrl);
+    const contentType = document.fileMimeType || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${sanitizeFileName(document.fileName)}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.send(buffer);
   } catch (err) {
     next(err);
   }

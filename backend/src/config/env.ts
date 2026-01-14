@@ -32,10 +32,11 @@ export const env = {
   realtime: {
     eventLimit: Number(process.env.REALTIME_EVENT_LIMIT ?? 50),
   },
-  cloudinary: {
-    cloudName: requireEnv('CLOUDINARY_CLOUD_NAME'),
-    apiKey: requireEnv('CLOUDINARY_API_KEY'),
-    apiSecret: requireEnv('CLOUDINARY_API_SECRET'),
+  supabase: {
+    url: requireEnv('SUPABASE_URL'),
+    serviceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+    storageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'esigning',
+    signedUrlTtlSeconds: Number(process.env.SUPABASE_SIGNED_URL_TTL_SECONDS ?? 600),
   },
   smtp: {
     host: requireEnv('SMTP_HOST'),

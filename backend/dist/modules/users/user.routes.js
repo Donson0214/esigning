@@ -6,3 +6,4 @@ const auth_middleware_1 = require("../../middlewares/auth.middleware");
 const user_controller_1 = require("./user.controller");
 exports.userRoutes = (0, express_1.Router)();
 exports.userRoutes.get('/me', auth_middleware_1.requireAuth, user_controller_1.me);
+exports.userRoutes.patch('/me', auth_middleware_1.requireAuth, user_controller_1.updateMe);

@@ -12,15 +12,33 @@ exports.env = {
     nodeEnv: process.env.NODE_ENV ?? 'development',
     port: Number(process.env.PORT ?? 4000),
     databaseUrl: requireEnv('DATABASE_URL'),
-    corsOrigin: process.env.CORS_ORIGIN ?? '*',
+    corsOrigins: (process.env.CORS_ORIGIN ?? '*')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    appBaseUrl: process.env.APP_BASE_URL ?? 'http://localhost:5173',
     jwtSecret: requireEnv('JWT_SECRET'),
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
+    firebase: {
+        projectId: process.env.FIREBASE_PROJECT_ID ?? '',
+    },
     signingAppUrl: process.env.SIGNING_APP_URL ?? 'http://localhost:5173/sign',
     signingLinkTtlMinutes: Number(process.env.SIGNING_LINK_TTL_MINUTES ?? 60 * 24),
-    cloudinary: {
-        cloudName: requireEnv('CLOUDINARY_CLOUD_NAME'),
-        apiKey: requireEnv('CLOUDINARY_API_KEY'),
-        apiSecret: requireEnv('CLOUDINARY_API_SECRET'),
+    signingSessionTtlMinutes: Number(process.env.SIGNING_SESSION_TTL_MINUTES ?? 30),
+    manifestHmacSecret: process.env.MANIFEST_HMAC_SECRET ?? '',
+    rateLimit: {
+        windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000),
+        authMax: Number(process.env.RATE_LIMIT_AUTH_MAX ?? 50),
+        signingMax: Number(process.env.RATE_LIMIT_SIGNING_MAX ?? 120),
+    },
+    realtime: {
+        eventLimit: Number(process.env.REALTIME_EVENT_LIMIT ?? 50),
+    },
+    supabase: {
+        url: requireEnv('SUPABASE_URL'),
+        serviceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
+        storageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'esigning',
+        signedUrlTtlSeconds: Number(process.env.SUPABASE_SIGNED_URL_TTL_SECONDS ?? 600),
     },
     smtp: {
         host: requireEnv('SMTP_HOST'),

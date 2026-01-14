@@ -1,5 +1,6 @@
 import { apiClient } from '@/shared/lib/axios';
 import { requestWithCorrelation } from '@/shared/lib/request';
+import type { FieldType } from '@shared/events';
 
 export type SigningSessionView = {
   signer: {
@@ -16,7 +17,10 @@ export type SigningSessionView = {
   };
   fields: Array<{
     id: string;
-    type: 'SIGNATURE' | 'DATE';
+    type: FieldType;
+    label?: string | null;
+    required?: boolean;
+    options?: Record<string, unknown> | null;
     page: number;
     x: number;
     y: number;

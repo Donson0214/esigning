@@ -33,7 +33,7 @@ const fieldSchema = z
     placeholder: z.string().min(1).optional(),
     required: z.boolean().optional(),
     value: z.string().optional(),
-    options: z.record(z.any()).optional(),
+    options: z.record(z.string(), z.any()).optional(),
     page: z.number().int().min(1),
     x: z.number().min(0),
     y: z.number().min(0),

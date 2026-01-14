@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middlewares/auth.middleware';
-import { uploadPdf } from '../../middlewares/upload.middleware';
+import { uploadDocument } from '../../middlewares/upload.middleware';
 import {
   createDocument,
   createField,
   deleteField,
   getAudit,
+  getDocumentFile,
   getCertificate,
   getDocument,
+  getDocumentPreviewUrl,
   getStats,
   listDocuments,
   sendDocument,
@@ -19,7 +21,9 @@ export const documentRoutes = Router();
 documentRoutes.use(requireAuth);
 documentRoutes.get('/', listDocuments);
 documentRoutes.get('/stats', getStats);
-documentRoutes.post('/', uploadPdf, createDocument);
+documentRoutes.post('/', uploadDocument, createDocument);
+documentRoutes.get('/:id/preview-url', getDocumentPreviewUrl);
+documentRoutes.get('/:id/file', getDocumentFile);
 documentRoutes.get('/:id', getDocument);
 documentRoutes.get('/:id/audit', getAudit);
 documentRoutes.get('/:id/certificate', getCertificate);

@@ -21,7 +21,8 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
   const status = typeof err?.status === 'number' ? err.status : 500;
 
   if (req.user) {
-    const docId = typeof req.params?.docId === 'string' ? req.params.docId : req.params?.id;
+    const docParam = req.params?.docId ?? req.params?.id;
+    const docId = typeof docParam === 'string' ? docParam : undefined;
     const reasonCode = (err?.code as EventReasonCode | undefined) ?? 'INTERNAL_ERROR';
     if (docId) {
       void emitEvent(

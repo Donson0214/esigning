@@ -15,6 +15,7 @@ export type Document = {
   title: string;
   status: DocumentStatus;
   fileUrl: string;
+  fileMimeType?: string;
   fileName: string;
   fileSize: number;
   createdAt?: string;

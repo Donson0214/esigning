@@ -9,5 +9,5 @@ export const notificationPreferencesSchema = z.object({
   emailEnabled: z.boolean().optional(),
   realtimeEnabled: z.boolean().optional(),
   inAppEnabled: z.boolean().optional(),
-  eventOverrides: z.record(z.boolean()).optional(),
+  eventOverrides: z.record(z.string(), z.boolean()).optional(),
 });

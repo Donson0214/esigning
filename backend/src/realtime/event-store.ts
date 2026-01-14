@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import type { EventEnvelope } from '../shared/events';
 
@@ -9,7 +10,7 @@ export async function persistEvent(event: EventEnvelope) {
       orgId: event.orgId,
       event: event.event,
       version: event.version,
-      payload: event,
+      payload: event as Prisma.InputJsonValue,
     },
   });
 }

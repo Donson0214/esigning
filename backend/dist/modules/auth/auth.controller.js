@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.register = register;
 exports.login = login;
+exports.firebaseAuth = firebaseAuth;
 exports.me = me;
 const auth_types_1 = require("./auth.types");
 const authService = __importStar(require("./auth.service"));
@@ -52,6 +53,16 @@ async function login(req, res, next) {
     try {
         const input = auth_types_1.loginSchema.parse(req.body);
         const result = await authService.login(input);
+        res.json(result);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function firebaseAuth(req, res, next) {
+    try {
+        const input = auth_types_1.firebaseAuthSchema.parse(req.body);
+        const result = await authService.firebaseLogin(input);
         res.json(result);
     }
     catch (err) {

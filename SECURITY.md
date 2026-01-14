@@ -46,7 +46,7 @@
 - Submit signature without manifest or with mismatched manifest hash.
 
 ## SSRF
-- If any URL fetch exists, ensure allowlist or strict validation (e.g., Cloudinary only).
+- If any URL fetch exists, ensure allowlist or strict validation (e.g., Supabase storage only).
 
 ## Dependency Vulnerabilities
 - Run `npm audit` in both `backend/` and `frontend/`.

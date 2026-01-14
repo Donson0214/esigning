@@ -1,7 +1,7 @@
-import { DocumentStatus, FieldType, SignerStatus, Prisma } from '@prisma/client';
+import { DocumentStatus, FieldStatus, FieldType, SignerStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
-import { buildCloudinaryAccessUrl, uploadBufferToCloudinary } from '../../utils/cloudinary.util';
+import { createSignedUrl, uploadBufferToSupabase } from '../../utils/supabase.util';
 import { hashBuffer } from '../../utils/hash.util';
 import { createHttpError } from '../../utils/http-error.util';
 import { generateToken, hashToken } from '../../utils/crypto.util';
@@ -24,20 +24,19 @@ type DocumentWithFiles = {
   signedFilePublicId?: string | null;
 };
 
-function withAccessUrls<T extends DocumentWithFiles>(document: T): T {
-  const fileUrl = buildCloudinaryAccessUrl({
-    url: document.fileUrl,
-    publicId: document.filePublicId,
-    fileName: document.fileName,
-  });
-  const signedFileUrl =
-    document.signedFileUrl && document.signedFilePublicId
-      ? buildCloudinaryAccessUrl({
-          url: document.signedFileUrl,
-          publicId: document.signedFilePublicId,
-          fileName: document.fileName,
-        })
-      : document.signedFileUrl ?? null;
+const toJsonInput = (
+  value: Prisma.JsonValue | Record<string, unknown> | null | undefined,
+): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.DbNull;
+  return value as Prisma.InputJsonValue;
+};
+
+async function withAccessUrls<T extends DocumentWithFiles>(document: T): Promise<T> {
+  const filePath = document.fileUrl || document.filePublicId;
+  const signedPath = document.signedFileUrl || document.signedFilePublicId;
+  const fileUrl = filePath ? await createSignedUrl(filePath).catch(() => filePath) : '';
+  const signedFileUrl = signedPath ? await createSignedUrl(signedPath).catch(() => signedPath) : null;
   return { ...document, fileUrl, signedFileUrl };
 }
 
@@ -48,7 +47,7 @@ function buildFieldSummary(field: {
   label?: string | null;
   required?: boolean | null;
   value?: string | null;
-  status?: string | null;
+  status?: FieldStatus | null;
   options?: Prisma.JsonValue | null;
   page: number;
   x: number;
@@ -63,7 +62,7 @@ function buildFieldSummary(field: {
     label: field.label ?? null,
     required: field.required ?? true,
     value: field.value ?? null,
-    status: (field.status ?? 'EMPTY') as any,
+    status: (field.status ?? FieldStatus.EMPTY) as 'EMPTY' | 'FILLED' | 'SIGNED',
     options: (field.options ?? null) as Record<string, unknown> | null,
     page: field.page,
     x: field.x,
@@ -84,7 +83,7 @@ async function ensureDocumentWritable(ownerId: string, documentId: string) {
   if (document.lockedAt || document.status === DocumentStatus.COMPLETED) {
     throw createHttpError(409, 'DOC_LOCKED', 'Document is locked');
   }
-  return withAccessUrls(document);
+  return document;
 }
 
 async function resolveSigner(params: { documentId: string; signerEmail?: string; signerIndex?: number }) {
@@ -119,18 +118,18 @@ export async function createDocument(params: {
   const hash = hashBuffer(file.buffer);
   const hashComputedAt = new Date();
 
-  const upload = await uploadBufferToCloudinary(file.buffer, {
-    folder: 'esigning/documents',
+  const upload = await uploadBufferToSupabase(file.buffer, {
+    folder: 'documents',
     fileName: file.originalname,
-    resourceType: 'raw',
+    contentType: file.mimetype,
   });
 
   const document = await prisma.document.create({
     data: {
       ownerId,
       title,
-      fileUrl: upload.url,
-      filePublicId: upload.publicId,
+      fileUrl: upload.path,
+      filePublicId: upload.path,
       fileName: file.originalname,
       fileMimeType: file.mimetype,
       fileSize: file.size,
@@ -232,7 +231,7 @@ export async function listDocuments(ownerId: string) {
       },
     },
   });
-  return documents.map((document) => withAccessUrls(document));
+  return Promise.all(documents.map((document) => withAccessUrls(document)));
 }
 
 export async function getDocument(ownerId: string, documentId: string) {
@@ -270,6 +269,12 @@ export async function sendDocument(params: {
   });
   if (!document) {
     throw createHttpError(404, 'DOCUMENT_NOT_FOUND', 'Document not found');
+  }
+  const fileName = document.fileName?.toLowerCase() ?? '';
+  const isPdfDocument =
+    document.fileMimeType?.toLowerCase() === 'application/pdf' || fileName.endsWith('.pdf');
+  if (!isPdfDocument) {
+    throw createHttpError(400, 'UNSUPPORTED_FORMAT', 'Only PDF documents can be sent for signing');
   }
   if (document.status !== DocumentStatus.DRAFT) {
     throw createHttpError(400, 'DOCUMENT_NOT_DRAFT', 'Only draft documents can be sent');
@@ -350,8 +355,8 @@ export async function sendDocument(params: {
           placeholder: field.placeholder ?? null,
           required: field.required ?? true,
           value: field.value ?? null,
-          status: field.value ? 'FILLED' : 'EMPTY',
-          options: field.options ?? null,
+          status: field.value ? FieldStatus.FILLED : FieldStatus.EMPTY,
+          options: toJsonInput(field.options ?? null),
           page: field.page,
           x: field.x,
           y: field.y,
@@ -476,21 +481,7 @@ export async function sendDocument(params: {
       actor: { userId: ownerId, role: 'SENDER' },
       correlationId: meta.correlationId,
       data: {
-        fields: result.createdFields.map((field) => ({
-          id: field.id,
-          signerId: field.signerId,
-          type: field.type,
-          label: field.label,
-          required: field.required,
-          value: field.value,
-          status: field.status,
-          options: field.options as Record<string, unknown> | null,
-          page: field.page,
-          x: field.x,
-          y: field.y,
-          width: field.width,
-          height: field.height,
-        })),
+        fields: result.createdFields.map((field) => buildFieldSummary(field)),
       },
     }),
   );
@@ -624,8 +615,8 @@ export async function createField(params: {
       placeholder: params.input.placeholder ?? null,
       required: params.input.required ?? true,
       value: params.input.value ?? null,
-      status: params.input.value ? 'FILLED' : 'EMPTY',
-      options: params.input.options ?? null,
+      status: params.input.value ? FieldStatus.FILLED : FieldStatus.EMPTY,
+      options: toJsonInput(params.input.options ?? null),
       page: params.input.page,
       x: params.input.x,
       y: params.input.y,
@@ -699,6 +690,7 @@ export async function updateField(params: {
   if (!existing) {
     throw createHttpError(404, 'FIELD_NOT_FOUND', 'Field not found');
   }
+  const resolvedOptions = params.input.options === undefined ? existing.options : params.input.options;
   const signer = await resolveSigner({
     documentId: params.documentId,
     signerEmail: params.input.signerEmail,
@@ -717,8 +709,8 @@ export async function updateField(params: {
       placeholder: params.input.placeholder ?? existing.placeholder,
       required: params.input.required ?? existing.required,
       value,
-      status: value ? 'FILLED' : existing.status,
-      options: params.input.options ?? existing.options,
+      status: value ? FieldStatus.FILLED : existing.status,
+      options: toJsonInput(resolvedOptions ?? null),
       page: params.input.page ?? existing.page,
       x: params.input.x ?? existing.x,
       y: params.input.y ?? existing.y,

@@ -8,5 +8,15 @@ const pino_1 = __importDefault(require("pino"));
 const env_1 = require("../config/env");
 exports.logger = (0, pino_1.default)({
     level: env_1.env.nodeEnv === 'production' ? 'info' : 'debug',
-    redact: ['req.headers.authorization'],
+    redact: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.body.password',
+        'req.body.token',
+        'req.body.signatures',
+        'req.body.signature',
+        'req.body.signatureData',
+        'req.body.artifact',
+        'req.body.signingToken',
+    ],
 });

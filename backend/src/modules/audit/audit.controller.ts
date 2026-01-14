@@ -30,7 +30,7 @@ export async function listAuditEvents(req: Request, res: Response, next: NextFun
       id: event.id,
       eventType: event.eventType,
       documentId: event.documentId,
-      documentTitle: event.document.title,
+      documentTitle: event.document?.title ?? null,
       actor: {
         type: event.actorType,
         userId: event.actorUserId ?? null,
@@ -44,9 +44,8 @@ export async function listAuditEvents(req: Request, res: Response, next: NextFun
       createdAt: event.createdAt.toISOString(),
     }));
 
-    const nextCursor = events.length
-      ? events[events.length - 1].createdAt.toISOString()
-      : null;
+    const lastEvent = events.length ? events[events.length - 1] : undefined;
+    const nextCursor = lastEvent ? lastEvent.createdAt.toISOString() : null;
 
     res.json({ events: payload, nextCursor });
   } catch (err) {

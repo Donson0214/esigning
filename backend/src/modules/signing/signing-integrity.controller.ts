@@ -51,10 +51,11 @@ export async function precomputeHash(req: Request, res: Response, next: NextFunc
     });
     res.json(result);
   } catch (err) {
-    if (req.params.docId && err instanceof Error) {
+    const docId = getParam(req.params.docId);
+    if (docId && err instanceof Error) {
       void emitSignatureRejected(
         req,
-        req.params.docId,
+        docId,
         (err as any).code ?? 'VALIDATION_FAILED',
         err.message,
       );
@@ -85,10 +86,11 @@ export async function createSigningSession(req: Request, res: Response, next: Ne
     });
     res.status(201).json(result);
   } catch (err) {
-    if (req.params.docId && err instanceof Error) {
+    const docId = getParam(req.params.docId);
+    if (docId && err instanceof Error) {
       void emitSignatureRejected(
         req,
-        req.params.docId,
+        docId,
         (err as any).code ?? 'VALIDATION_FAILED',
         err.message,
       );
@@ -120,10 +122,11 @@ export async function submitManifest(req: Request, res: Response, next: NextFunc
     });
     res.json(result);
   } catch (err) {
-    if (req.params.docId && err instanceof Error) {
+    const docId = getParam(req.params.docId);
+    if (docId && err instanceof Error) {
       void emitSignatureRejected(
         req,
-        req.params.docId,
+        docId,
         (err as any).code ?? 'VALIDATION_FAILED',
         err.message,
       );
@@ -156,10 +159,11 @@ export async function uploadSignature(req: Request, res: Response, next: NextFun
     });
     res.json(result);
   } catch (err) {
-    if (req.params.docId && err instanceof Error) {
+    const docId = getParam(req.params.docId);
+    if (docId && err instanceof Error) {
       void emitSignatureRejected(
         req,
-        req.params.docId,
+        docId,
         (err as any).code ?? 'VALIDATION_FAILED',
         err.message,
       );
