@@ -184,6 +184,10 @@ export type EventEnvelope<T extends EventName = EventName> = {
   data: EventDataMap[T];
 };
 
+export type AnyEventEnvelope = {
+  [K in EventName]: EventEnvelope<K>;
+}[EventName];
+
 export function createEvent<T extends EventName>(params: {
   event: T;
   orgId: string;

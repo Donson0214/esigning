@@ -45,6 +45,13 @@
         >
           <span class="icon" v-html="icons[item.icon]"></span>
           <span v-if="!collapsed" class="label">{{ item.label }}</span>
+          <span
+            v-if="item.path === '/app/received' && receivedPendingCount > 0"
+            class="nav-badge"
+            :class="{ compact: collapsed }"
+          >
+            {{ receivedPendingCount }}
+          </span>
         </RouterLink>
       </nav>
 
@@ -69,6 +76,7 @@ import { computed } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { navigation } from '@/shared/constants/navigation';
 import { useAuthProfile } from '@/features/auth/useAuthProfile';
+import { useReceivedSummary } from '@/features/documents/composables';
 
 defineProps<{
   collapsed: boolean;
@@ -87,6 +95,7 @@ const userName = computed(() => displayName.value);
 const userEmail = computed(() => email.value || 'Not signed in');
 const userInitials = computed(() => initials.value);
 const userAvatar = computed(() => avatarUrl.value);
+const { pendingCount: receivedPendingCount } = useReceivedSummary();
 
 const icons: Record<string, string> = {
   dashboard:
@@ -211,6 +220,7 @@ const icons: Record<string, string> = {
   color: var(--ink);
   font-weight: 600;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  position: relative;
 }
 
 .nav-item:not(.active):hover {
@@ -233,6 +243,32 @@ const icons: Record<string, string> = {
 
 .nav-item.active .icon svg {
   stroke: #ffffff;
+}
+
+.nav-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: #ffffff;
+  border-radius: 999px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 12px rgba(79, 70, 229, 0.25);
+}
+
+.nav-badge.compact {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  margin-left: 0;
+  min-width: 18px;
+  height: 18px;
+  font-size: 0.65rem;
+  padding: 0 4px;
 }
 
 .sidebar.collapsed .nav-item {

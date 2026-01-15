@@ -6,6 +6,10 @@ declare module '*.vue' {
   export default component;
 }
 
+declare module 'vue' {
+  export { computed, createApp, onBeforeUnmount, onMounted, ref } from '@vue/runtime-dom';
+}
+
 declare module '@vue/runtime-core' {
   interface AppConfig {
     devtools?: boolean;

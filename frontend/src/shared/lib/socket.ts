@@ -1,8 +1,8 @@
 import { io, type Socket } from 'socket.io-client';
-import type { EventEnvelope } from '@shared/events';
+import type { AnyEventEnvelope } from '@shared/events';
 import { createId } from './ids';
 
-type EventListener = (event: EventEnvelope) => void;
+type EventListener = (event: AnyEventEnvelope) => void;
 
 let socket: Socket | null = null;
 const listeners = new Set<EventListener>();
@@ -24,7 +24,7 @@ export function connectSocket(token?: string) {
     },
   });
 
-  socket.on('event', (event: EventEnvelope) => {
+  socket.on('event', (event: AnyEventEnvelope) => {
     listeners.forEach((listener) => listener(event));
   });
 
@@ -50,9 +50,9 @@ export function leaveDocument(docId: string, correlationId = createId()) {
 }
 
 export async function syncDocumentEvents(docId: string, limit = 50) {
-  if (!socket) return { docId, events: [] as EventEnvelope[] };
-  return new Promise<{ docId: string; events: EventEnvelope[] }>((resolve) => {
-    socket?.emit('doc.events.sync', { docId, limit }, (payload: { docId: string; events: EventEnvelope[] }) => {
+  if (!socket) return { docId, events: [] as AnyEventEnvelope[] };
+  return new Promise<{ docId: string; events: AnyEventEnvelope[] }>((resolve) => {
+    socket?.emit('doc.events.sync', { docId, limit }, (payload: { docId: string; events: AnyEventEnvelope[] }) => {
       resolve(payload);
     });
   });

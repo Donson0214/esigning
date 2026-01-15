@@ -48,6 +48,7 @@ const fieldSchema = z
 export const sendDocumentSchema = z.object({
   signers: z.array(signerSchema).min(1),
   fields: z.array(fieldSchema).min(1).optional(),
+  inviteStrategy: z.enum(['immediate', 'sequential']).optional(),
 });
 
 export const createFieldSchema = fieldSchema;

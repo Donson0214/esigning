@@ -45,118 +45,171 @@
     </section>
 
     <section v-else-if="workflowStep === 1" class="stage stage-setup">
-      <div class="setup-grid">
-        <div class="setup-main">
-          <div class="setup-card">
-            <div class="setup-header">
-              <h3>Document setup</h3>
-              <p>Tell us what you want to sign and who needs to sign it.</p>
+      <div class="setup-shell">
+        <div class="setup-backdrop"></div>
+        <aside class="setup-drawer" role="dialog" aria-modal="true" aria-label="Document details">
+          <div class="setup-drawer-top">
+            <div class="setup-drawer-pill">
+              <span class="drawer-title">Details</span>
+              <span class="drawer-meta">Step 2</span>
             </div>
-            <div class="setup-actions">
-              <button class="btn btn-primary" type="button" :disabled="!canProceedSetup" @click="proceedToBuilder">
-                Continue to preview
-              </button>
-              <button class="btn btn-outline" type="button" @click="workflowStep = 0">
-                Change mode
-              </button>
-            </div>
-            <p v-if="setupError" class="builder-error">{{ setupError }}</p>
+            <button class="icon-btn" type="button" @click="handleBack" aria-label="Close details">x</button>
           </div>
-
-          <div v-if="doc" class="summary-card">
-            <h4>Selected document</h4>
-            <p class="summary-title">{{ doc.title }}</p>
-            <p class="summary-sub">{{ signerSummary }}</p>
-            <div class="summary-tags">
-              <span class="tag">{{ doc.status }}</span>
-              <span class="tag">{{ pageCount }} pages</span>
-            </div>
-          </div>
-        </div>
-
-        <aside class="setup-panel">
-          <div class="panel-section">
-            <div class="panel-title">Document</div>
-            <label class="field-label">
-              Document name
-              <input
-                v-model="documentTitle"
-                class="input"
-                type="text"
-                :readonly="Boolean(doc)"
-                placeholder="e.g. Service Agreement"
-              />
-            </label>
-            <label class="field-label">
-              Choose from library
-              <div class="doc-select">
-                <select v-model="selectedDocId" @change="handleDocChange">
-                  <option value="">Select PDF document</option>
-                  <option v-for="doc in pdfDocuments" :key="doc.id" :value="doc.id">
-                    {{ doc.title }}
-                  </option>
-                </select>
-                <svg class="chev" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </div>
-            </label>
-            <label class="upload-btn upload-block">
-              <input
-                ref="uploadInput"
-                type="file"
-                accept=".pdf"
-                @change="handleUpload"
-              />
-              Upload PDF
-            </label>
-            <p class="helper">PDF files only.</p>
-          </div>
-
-          <div v-if="signingIntent === 'send'" class="panel-section">
-            <div class="panel-title">Recipients</div>
-            <div class="signer-list">
-              <div v-for="signer in signerInputs" :key="signer.email" class="signer-row">
-                <div>
-                  <p class="signer-name">{{ signer.name || signer.email }}</p>
-                  <p class="signer-email">{{ signer.email }}</p>
+          <div class="setup-grid">
+            <div class="setup-main">
+              <div class="setup-card">
+                <div class="setup-header">
+                  <div class="setup-title">
+                    <span class="panel-icon">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 7h16" />
+                        <path d="M4 17h16" />
+                        <circle cx="9" cy="7" r="2" />
+                        <circle cx="15" cy="17" r="2" />
+                      </svg>
+                    </span>
+                    <h3>Document setup</h3>
+                  </div>
                 </div>
-                <button class="icon-btn" type="button" @click="removeSigner(signer.email)">x</button>
+                <p v-if="setupError" class="builder-error">{{ setupError }}</p>
               </div>
-            </div>
-            <div class="signer-form">
-              <input
-                v-model="newSignerName"
-                class="input"
-                type="text"
-                placeholder="Recipient full name"
-                @input="signerError = ''"
-              />
-              <input
-                v-model="newSignerEmail"
-                class="input"
-                type="email"
-                placeholder="Recipient Gmail"
-                @input="signerError = ''"
-              />
-              <button class="btn btn-outline" type="button" @click="addSigner">Add signer</button>
-              <p v-if="signerError" class="builder-error">{{ signerError }}</p>
-            </div>
-          </div>
 
-          <div v-else class="panel-section">
-            <div class="panel-title">Signer</div>
-            <div class="self-card">
-              <span class="self-avatar">{{ initials }}</span>
-              <div>
-                <p class="self-name">{{ displayName }}</p>
-                <p class="self-email">{{ email || 'Add your email in settings' }}</p>
+              <div class="setup-panel">
+                <div class="panel-section">
+                  <div class="panel-title">
+                    <span class="panel-icon">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 3h7l5 5v13H7z" />
+                        <path d="M14 3v5h5" />
+                        <path d="M9 13h6" />
+                        <path d="M9 17h6" />
+                      </svg>
+                    </span>
+                    Document
+                  </div>
+                  <label class="field-label">
+                    Document name
+                    <input
+                      v-model="documentTitle"
+                      class="input"
+                      type="text"
+                      :readonly="Boolean(doc)"
+                      placeholder="e.g. Service Agreement"
+                    />
+                  </label>
+                  <label class="field-label">
+                    Choose from library
+                    <div class="doc-select">
+                      <select v-model="selectedDocId" @change="handleDocChange">
+                        <option value="">Select PDF document</option>
+                        <option v-for="doc in pdfDocuments" :key="doc.id" :value="doc.id">
+                          {{ doc.title }}
+                        </option>
+                      </select>
+                      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </div>
+                  </label>
+                  <label class="upload-btn upload-block">
+                    <input
+                      ref="uploadInput"
+                      type="file"
+                      accept=".pdf"
+                      @change="handleUpload"
+                    />
+                    Upload PDF
+                  </label>
+                  <p class="helper">PDF files only.</p>
+                </div>
+
+                <div v-if="signingIntent === 'send'" class="panel-section">
+                  <div class="panel-title">
+                    <span class="panel-icon">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="8" cy="9" r="3" />
+                        <circle cx="17" cy="8" r="2.5" />
+                        <path d="M2 20a6 6 0 0 1 12 0" />
+                        <path d="M13.5 20a5.5 5.5 0 0 1 8.5 0" />
+                      </svg>
+                    </span>
+                    Recipients
+                  </div>
+                  <div class="signer-list">
+                    <div v-for="signer in signerInputs" :key="signer.email" class="signer-row">
+                      <div>
+                        <p class="signer-name">{{ signer.isSender ? 'You' : signer.name || signer.email }}</p>
+                        <p class="signer-email">{{ signer.email }}</p>
+                      </div>
+                      <button
+                        v-if="!signer.isSender"
+                        class="icon-btn"
+                        type="button"
+                        @click="removeSigner(signer.email)"
+                      >
+                        x
+                      </button>
+                    </div>
+                  </div>
+                  <div class="signer-form">
+                    <input
+                      v-model="newSignerName"
+                      class="input"
+                      type="text"
+                      placeholder="Recipient full name"
+                      @input="signerError = ''"
+                    />
+                    <input
+                      v-model="newSignerEmail"
+                      class="input"
+                      type="email"
+                      placeholder="Recipient Gmail"
+                      @input="signerError = ''"
+                    />
+                    <button class="btn btn-outline" type="button" @click="addSigner">Add signer</button>
+                    <p v-if="signerError" class="builder-error">{{ signerError }}</p>
+                  </div>
+                </div>
+
+                <div v-else class="panel-section">
+                  <div class="panel-title">
+                    <span class="panel-icon">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="8" r="3.5" />
+                        <path d="M4 20a8 8 0 0 1 16 0" />
+                      </svg>
+                    </span>
+                    Signer
+                  </div>
+                  <div class="self-card">
+                    <span class="self-avatar">{{ initials }}</span>
+                    <div>
+                      <p class="self-name">{{ displayName }}</p>
+                      <p class="self-email">{{ email || 'Add your email in settings' }}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <button class="btn btn-outline" type="button" @click="addSelfSigner" :disabled="!email">
-                Use my profile
-              </button>
+
+              <div v-if="doc" class="summary-card">
+                <h4>
+                  <span class="panel-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 10v6" />
+                      <path d="M12 7h.01" />
+                    </svg>
+                  </span>
+                  Selected document
+                </h4>
+                <p class="summary-title">{{ doc.title }}</p>
+                <p class="summary-sub">{{ signerSummary }}</p>
+                <div class="summary-tags">
+                  <span class="tag">{{ doc.status }}</span>
+                  <span class="tag">{{ pageCount }} pages</span>
+                </div>
+              </div>
             </div>
-            <p class="helper">We will send the signing link to you.</p>
           </div>
         </aside>
       </div>
@@ -175,9 +228,26 @@
           <div class="status-pill" :class="statusClass">
             {{ doc?.status ?? 'No document' }}
           </div>
-          <button class="btn btn-outline" type="button" @click="saveDraft" :disabled="!doc">Save</button>
+          <button class="btn btn-outline" type="button" @click="saveDraft" :disabled="!doc || savingDraft">
+            {{ savingDraft ? 'Saving...' : 'Save' }}
+          </button>
           <button class="btn btn-outline" type="button" disabled>Detect fields</button>
-          <button class="btn btn-primary" type="button" @click="sendForSigning" :disabled="!canSend">
+          <button
+            v-if="signingIntent === 'send'"
+            class="btn btn-outline"
+            type="button"
+            @click="signNowAndSend"
+            :disabled="!canSend || savingDraft || signingNow"
+          >
+            {{ signingNow ? 'Signing...' : 'Sign now & send' }}
+          </button>
+          <button
+            v-if="signingIntent === 'self'"
+            class="btn btn-primary"
+            type="button"
+            @click="sendForSigning"
+            :disabled="!canSend || savingDraft || signingNow"
+          >
             {{ sendLabel }}
           </button>
         </div>
@@ -185,7 +255,8 @@
       <p v-if="doc && !isPdfPreview" class="builder-note">
         Preview only for this file type. Convert to PDF to place fields and send for signing.
       </p>
-      <p v-if="builderError" class="builder-error">{{ builderError }}</p>
+        <p v-if="builderError" class="builder-error">{{ builderError }}</p>
+        <p v-if="builderNotice" class="builder-success">{{ builderNotice }}</p>
 
       <div :class="['builder-body', !isPdfPreview && 'builder-body--compact']">
         <aside v-if="isPdfPreview" class="left-panel">
@@ -284,10 +355,12 @@
             <div class="signer-list">
               <div v-for="signer in signerInputs" :key="signer.email" class="signer-row">
                 <div>
-                  <p class="signer-name">{{ signer.name || signer.email }}</p>
+                  <p class="signer-name">{{ signer.isSender ? 'You' : signer.name || signer.email }}</p>
                   <p class="signer-email">{{ signer.email }}</p>
                 </div>
-                <button class="icon-btn" type="button" @click="removeSigner(signer.email)">x</button>
+                <button v-if="!signer.isSender" class="icon-btn" type="button" @click="removeSigner(signer.email)">
+                  x
+                </button>
               </div>
             </div>
             <div class="signer-form" v-if="signingIntent === 'send'">
@@ -352,7 +425,7 @@
               <select v-model="activeFieldDraft.signerEmail" @change="persistActiveField">
                 <option value="">Unassigned</option>
                 <option v-for="signer in signerInputs" :key="signer.email" :value="signer.email">
-                  {{ signer.name || signer.email }}
+                  {{ signer.isSender ? 'You' : signer.name || signer.email }}
                 </option>
               </select>
             </label>
@@ -595,12 +668,14 @@ import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-d
 import { useAuthProfile } from '@/features/auth/useAuthProfile';
 import { useDocuments } from '@/features/documents/composables';
 import { createField, deleteField, getDocument as fetchDocument, sendDocument, updateField, uploadDocument } from '@/features/documents/api';
+import { applySignature, createSigningSession, submitManifest, uploadSignature } from '@/features/signing/api';
 import { apiClient } from '@/shared/lib/axios';
+import { createId } from '@/shared/lib/ids';
 import type { Document, DocumentField } from '@/features/documents/types';
 
 GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
-type SignerInput = { name?: string; email: string };
+type SignerInput = { name?: string; email: string; isSender?: boolean };
 
 const router = useRouter();
 const { documents, refresh } = useDocuments();
@@ -618,7 +693,15 @@ const workflowStep = ref<0 | 1 | 2>(0);
 const signingIntent = ref<'send' | 'self' | null>(null);
 const setupError = ref('');
 const builderError = ref('');
+const builderNotice = ref('');
 const signerError = ref('');
+const savingDraft = ref(false);
+const signingNow = ref(false);
+const senderEmail = computed(() => email.value.trim().toLowerCase());
+const senderName = computed(() => displayName.value || email.value || 'You');
+const senderSigner = computed(() => signerInputs.value.find((signer) => signer.isSender));
+const recipientSigners = computed(() => signerInputs.value.filter((signer) => !signer.isSender));
+let builderNoticeTimer: number | null = null;
 
 const steps = [
   { key: 'mode', label: 'Choose mode' },
@@ -650,6 +733,8 @@ const previewUrl = ref('');
 const imagePreviewUrl = ref('');
 const pdfLoadToken = ref(0);
 const textLoadToken = ref(0);
+let renderAllPagesQueue: Promise<void> = Promise.resolve();
+let renderThumbnailsQueue: Promise<void> = Promise.resolve();
 
 type SignatureMode = 'draw' | 'type' | 'upload';
 type SignatureStyle = { id: string; label: string; font: string };
@@ -741,6 +826,17 @@ const statusClass = computed(() => {
   return 'neutral';
 });
 
+const setBuilderNotice = (message: string) => {
+  builderNotice.value = message;
+  if (builderNoticeTimer) {
+    window.clearTimeout(builderNoticeTimer);
+  }
+  builderNoticeTimer = window.setTimeout(() => {
+    builderNotice.value = '';
+    builderNoticeTimer = null;
+  }, 3000);
+};
+
 const goBack = () => router.push('/app/documents');
 
 const getExtension = (value?: string) => {
@@ -766,6 +862,24 @@ const isValidEmail = (value: string) => /.+@.+\..+/.test(value);
 const isBlobUrl = (value: string) => value.startsWith('blob:');
 const isSignatureDataUrl = (value: string) => value.startsWith('data:image');
 const isSignatureField = (field: DocumentField) => field.type === 'SIGNATURE' || field.type === 'INITIAL';
+
+const getInitialsFromText = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const source = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
+  const parts = source.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (parts.length === 0) {
+    return trimmed.slice(0, 2).toUpperCase();
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return parts
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+};
 
 const getSignatureMeta = (field: DocumentField) => {
   if (!field.options || typeof field.options !== 'object') return null;
@@ -840,7 +954,7 @@ const isOfficePreview = computed(() => previewKind.value === 'office');
 const isTextPreview = computed(() => previewKind.value === 'text');
 
 const preferredPreviewUrl = computed(() => {
-  return previewUrl.value || doc.value?.fileUrl || '';
+  return previewUrl.value || doc.value?.signedFileUrl || doc.value?.fileUrl || '';
 });
 
 const officePreviewUrl = computed(() => {
@@ -851,7 +965,15 @@ const officePreviewUrl = computed(() => {
 
 const fallbackPreviewUrl = computed(() => preferredPreviewUrl.value);
 
-const hasValidSigners = computed(() => signerInputs.value.some((signer) => signer.email.trim().length > 0));
+const hasValidSigners = computed(() => {
+  if (signingIntent.value === 'self') {
+    return Boolean(senderSigner.value?.email?.trim().length);
+  }
+  if (signingIntent.value === 'send') {
+    return senderEmail.value.length > 0 && recipientSigners.value.length > 0;
+  }
+  return false;
+});
 
 const signerSummary = computed(() => {
   if (!hasValidSigners.value) {
@@ -859,10 +981,13 @@ const signerSummary = computed(() => {
       ? 'Add your email to sign this document.'
       : 'Add at least one recipient to continue.';
   }
-  if (signerInputs.value.length === 1) {
-    return `1 signer - ${signerInputs.value[0].email}`;
+  if (signingIntent.value === 'send') {
+    if (recipientSigners.value.length === 1) {
+      return `1 recipient - ${recipientSigners.value[0].email}`;
+    }
+    return `${recipientSigners.value.length} recipients added`;
   }
-  return `${signerInputs.value.length} signers added`;
+  return `1 signer - ${senderSigner.value?.email ?? senderEmail.value}`;
 });
 
 const canProceedSetup = computed(() => Boolean(doc.value) && hasValidSigners.value && isPdfPreview.value);
@@ -895,15 +1020,20 @@ const handleBack = () => {
   workflowStep.value = (workflowStep.value - 1) as 0 | 1 | 2;
 };
 
-const addSelfSigner = () => {
-  const selfEmail = email.value.trim().toLowerCase();
-  if (!selfEmail) return;
-  signerInputs.value = [{ name: displayName.value, email: selfEmail }];
+const ensureSenderSigner = () => {
+  if (!senderEmail.value) return;
+  const recipients = signerInputs.value.filter(
+    (signer) => !signer.isSender && signer.email !== senderEmail.value,
+  );
+  signerInputs.value = [
+    { name: senderName.value, email: senderEmail.value, isSender: true },
+    ...recipients,
+  ];
 };
 
-const openUploadDialog = async () => {
-  await nextTick();
-  uploadInput.value?.click();
+const addSelfSigner = () => {
+  if (!senderEmail.value) return;
+  signerInputs.value = [{ name: senderName.value, email: senderEmail.value, isSender: true }];
 };
 
 const selectSigningIntent = async (intent: 'send' | 'self') => {
@@ -917,9 +1047,8 @@ const selectSigningIntent = async (intent: 'send' | 'self') => {
   signerError.value = '';
   if (intent === 'self') {
     addSelfSigner();
-  }
-  if (!doc.value) {
-    await openUploadDialog();
+  } else {
+    ensureSenderSigner();
   }
 };
 
@@ -936,6 +1065,15 @@ const setThumbRef = (page: number) => (el: HTMLCanvasElement | null) => {
 };
 
 const fieldsByPage = (page: number) => fields.value.filter((field) => field.page === page);
+const getDefaultSignerEmail = (type: DocumentField['type']) => {
+  if (signingIntent.value === 'send') {
+    if (type === 'SIGNATURE' || type === 'INITIAL') {
+      return senderSigner.value?.email ?? recipientSigners.value[0]?.email;
+    }
+    return recipientSigners.value[0]?.email ?? senderSigner.value?.email;
+  }
+  return senderSigner.value?.email ?? signerInputs.value[0]?.email;
+};
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -984,6 +1122,81 @@ const buildNormalizedOptions = (field: DocumentField, size: { width: number; hei
   };
 };
 
+const buildFieldUpdatePayload = (field: DocumentField) => {
+  const size = pageSizes.value[field.page];
+  return {
+    label: field.label ?? undefined,
+    placeholder: field.placeholder ?? undefined,
+    signerEmail: field.signerEmail || undefined,
+    required: field.required ?? undefined,
+    value: field.value ?? undefined,
+    options: size ? buildNormalizedOptions(field, size) : field.options ?? undefined,
+    page: field.page,
+    x: field.x,
+    y: field.y,
+    width: field.width,
+    height: field.height,
+  };
+};
+
+const getSenderFields = () =>
+  fields.value.filter((field) => field.signerEmail?.toLowerCase() === senderEmail.value);
+
+const resolveInitialValueForField = (field: DocumentField) => {
+  const rawValue = field.value ?? '';
+  const meta = getSignatureMeta(field);
+  const baseText = !rawValue || isSignatureDataUrl(rawValue)
+    ? meta?.text ?? senderName.value ?? senderEmail.value
+    : rawValue;
+  return getInitialsFromText(baseText || senderName.value || senderEmail.value || 'IN') || 'IN';
+};
+
+const resolveSenderFieldValue = (field: DocumentField) => {
+  const rawValue = field.value ?? '';
+  if (field.type === 'INITIAL') {
+    return resolveInitialValueForField(field);
+  }
+  if (field.type === 'SIGNATURE') {
+    return rawValue;
+  }
+  if (field.type === 'DATE') {
+    return rawValue || new Date().toISOString().slice(0, 10);
+  }
+  if (field.type === 'EMAIL') {
+    return rawValue || senderEmail.value;
+  }
+  if (field.type === 'FULL_NAME') {
+    return rawValue || senderName.value;
+  }
+  if (field.type === 'CHECKBOX') {
+    return isCheckedValue(rawValue) ? 'checked' : '';
+  }
+  if (field.type === 'DROPDOWN' || field.type === 'RADIO') {
+    return rawValue || getFieldChoices(field)[0] || '';
+  }
+  return rawValue;
+};
+
+const resolveSignatureArtifact = (
+  senderFields: DocumentField[],
+): { type: 'DRAWN' | 'TYPED' | 'UPLOADED'; data: string } | null => {
+  const signatureField =
+    senderFields.find((field) => field.type === 'SIGNATURE' && field.value) ??
+    senderFields.find((field) => field.type === 'INITIAL' && field.value);
+  if (!signatureField) return null;
+  const rawValue = (signatureField.value ?? '').trim();
+  if (signatureField.type === 'INITIAL') {
+    return { type: 'TYPED' as const, data: resolveInitialValueForField(signatureField) };
+  }
+  if (isSignatureDataUrl(rawValue)) {
+    const meta = getSignatureMeta(signatureField);
+    const mode = meta?.mode;
+    const type = mode === 'draw' ? 'DRAWN' : 'UPLOADED';
+    return { type, data: rawValue };
+  }
+  return { type: 'TYPED' as const, data: rawValue };
+};
+
 const fieldStyle = (field: DocumentField, page: number) => {
   const size = pageSizes.value[page];
   if (!size) return {};
@@ -1012,6 +1225,7 @@ const selectField = (id: string) => {
 
 const handleFieldClick = (field: DocumentField) => {
   selectField(field.id);
+  if (signingIntent.value === 'self') return;
   if (isSignatureField(field)) {
     void openSignatureModal(field);
   } else {
@@ -1499,21 +1713,27 @@ const addSigner = () => {
     signerError.value = 'Enter a valid email address.';
     return;
   }
+  if (senderEmail.value && email === senderEmail.value) {
+    signerError.value = 'Use a recipient email, not your own.';
+    return;
+  }
   if (signerInputs.value.some((signer) => signer.email === email)) {
     signerError.value = 'That recipient is already added.';
     newSignerEmail.value = '';
     return;
   }
-  signerInputs.value = [
-    ...signerInputs.value,
-    { name, email },
-  ];
+  const nextRecipient = { name, email };
+  if (senderSigner.value) {
+    signerInputs.value = [senderSigner.value, ...recipientSigners.value, nextRecipient];
+  } else {
+    signerInputs.value = [...recipientSigners.value, nextRecipient];
+  }
   newSignerName.value = '';
   newSignerEmail.value = '';
 };
 
 const removeSigner = (email: string) => {
-  signerInputs.value = signerInputs.value.filter((signer) => signer.email !== email);
+  signerInputs.value = signerInputs.value.filter((signer) => signer.email !== email || signer.isSender);
 };
 
 const handleUpload = async (event: Event) => {
@@ -1562,6 +1782,7 @@ const handleDocChange = async () => {
 };
 
 const loadDocument = async (documentId: string) => {
+  const isSameDoc = doc.value?.id === documentId;
   const data = await fetchDocument(documentId);
   doc.value = data;
   documentTitle.value = data.title;
@@ -1573,8 +1794,19 @@ const loadDocument = async (documentId: string) => {
     signerInputs.value = [];
     addSelfSigner();
   } else {
-    signerInputs.value =
-      data.signers?.map((signer) => ({ name: signer.name ?? undefined, email: signer.email })) ?? [];
+    if (data.signers && data.signers.length > 0) {
+      signerInputs.value = data.signers
+        .slice()
+        .sort((a, b) => a.signOrder - b.signOrder)
+        .map((signer) => ({
+          name: signer.name ?? undefined,
+          email: signer.email,
+          isSender: signer.email.toLowerCase() === senderEmail.value,
+        }));
+    } else if (!isSameDoc) {
+      signerInputs.value = [];
+    }
+    ensureSenderSigner();
   }
   activeFieldId.value = null;
   await preparePreview();
@@ -1606,10 +1838,14 @@ const loadPreviewUrl = async () => {
   previewUrl.value = '';
   if (!doc.value?.id) return;
   try {
+    if (doc.value?.signedFileUrl) {
+      previewUrl.value = doc.value.signedFileUrl;
+      return;
+    }
     const response = await apiClient.get<{ url: string }>(`/documents/${doc.value.id}/preview-url`);
     previewUrl.value = response.data.url;
   } catch {
-    previewUrl.value = doc.value?.fileUrl ?? '';
+    previewUrl.value = doc.value?.signedFileUrl || doc.value?.fileUrl || '';
   }
 };
 
@@ -1679,7 +1915,7 @@ const preparePreview = async () => {
   resetTextPreview();
   resetImagePreview();
   previewUrl.value = '';
-  if (!doc.value?.fileUrl) return;
+  if (!doc.value?.fileUrl && !doc.value?.signedFileUrl) return;
   await loadPreviewUrl();
   if (!isPdfPreview.value) {
     pdfError.value = 'Only PDF documents are supported for preview.';
@@ -1695,7 +1931,14 @@ const loadPdf = async () => {
   const fallbackUrl = fallbackPreviewUrl.value;
   try {
     let pdf: PDFDocumentProxy | null = null;
-    if (doc.value?.id) {
+    if (doc.value?.signedFileUrl) {
+      try {
+        pdf = await getDocument(doc.value.signedFileUrl).promise;
+      } catch {
+        pdf = null;
+      }
+    }
+    if (!pdf && doc.value?.id) {
       try {
         const response = await apiClient.get<ArrayBuffer>(`/documents/${doc.value.id}/file`, {
           responseType: 'arraybuffer',
@@ -1721,8 +1964,8 @@ const loadPdf = async () => {
     pdfDoc.value = pdf;
     pageCount.value = pdf.numPages;
     pageSizes.value = {};
-    await renderAllPages(token);
-    await renderThumbnails(token);
+    await enqueueRenderAllPages(token);
+    await enqueueRenderThumbnails(token);
   } catch (err) {
     if (token !== pdfLoadToken.value) return;
     pdfDoc.value?.destroy();
@@ -1777,14 +2020,28 @@ const renderThumbnails = async (token = pdfLoadToken.value) => {
   }
 };
 
+const enqueueRenderAllPages = (token = pdfLoadToken.value) => {
+  renderAllPagesQueue = renderAllPagesQueue
+    .catch(() => undefined)
+    .then(() => renderAllPages(token));
+  return renderAllPagesQueue;
+};
+
+const enqueueRenderThumbnails = (token = pdfLoadToken.value) => {
+  renderThumbnailsQueue = renderThumbnailsQueue
+    .catch(() => undefined)
+    .then(() => renderThumbnails(token));
+  return renderThumbnailsQueue;
+};
+
 const zoomIn = async () => {
   scale.value = Math.min(2, scale.value + 0.1);
-  await renderAllPages();
+  await enqueueRenderAllPages();
 };
 
 const zoomOut = async () => {
   scale.value = Math.max(0.6, scale.value - 0.1);
-  await renderAllPages();
+  await enqueueRenderAllPages();
 };
 
 const scrollToPage = (page: number) => {
@@ -1844,7 +2101,7 @@ const createFieldAtPosition = async (type: DocumentField['type'], clientX: numbe
     width: defaults.width,
     height: defaults.height,
     required: true,
-    signerEmail: signerInputs.value[0]?.email,
+    signerEmail: getDefaultSignerEmail(type),
     options: { normalized },
   };
   const tempId = `temp-${Date.now()}`;
@@ -1958,12 +2215,151 @@ const getDefaultFieldSize = (type: DocumentField['type']) => {
 };
 
 const saveDraft = async () => {
+  if (!doc.value || savingDraft.value) return;
+  builderError.value = '';
+  builderNotice.value = '';
+  if (signatureModalOpen.value || fieldModalOpen.value) {
+    builderError.value = 'Close the open editor before saving.';
+    return;
+  }
+  savingDraft.value = true;
+  try {
+    if (activeField.value) {
+      await persistActiveField();
+    }
+    if (fields.value.length > 0) {
+      await Promise.all(
+        fields.value.map((field) => updateField(doc.value!.id, field.id, buildFieldUpdatePayload(field))),
+      );
+    }
+    await loadDocument(doc.value.id);
+    setBuilderNotice('Draft saved.');
+  } catch {
+    builderError.value = 'Unable to save draft.';
+  } finally {
+    savingDraft.value = false;
+  }
+};
+
+const signNowAndSend = async () => {
+  builderError.value = '';
+  builderNotice.value = '';
+  if (signingNow.value || savingDraft.value) return;
   if (!doc.value) return;
-  await loadDocument(doc.value.id);
+  if (!isPdfPreview.value) {
+    builderError.value = 'Convert this document to PDF before signing.';
+    return;
+  }
+  if (signingIntent.value !== 'send') {
+    builderError.value = 'Switch to send mode to sign and invite recipients.';
+    return;
+  }
+  if (!hasValidSigners.value) {
+    builderError.value = 'Add at least one recipient before signing.';
+    return;
+  }
+  if (!senderEmail.value) {
+    builderError.value = 'Add your email before signing.';
+    return;
+  }
+  if (signatureModalOpen.value || fieldModalOpen.value) {
+    builderError.value = 'Close the open editor before signing.';
+    return;
+  }
+  const senderFieldsBeforeSave = getSenderFields();
+  if (senderFieldsBeforeSave.length === 0) {
+    builderError.value = 'Assign at least one field to yourself before signing.';
+    return;
+  }
+  const senderSignatureFields = senderFieldsBeforeSave.filter(isSignatureField);
+  if (senderSignatureFields.length === 0) {
+    builderError.value = 'Add a signature or initial field for yourself before signing.';
+    return;
+  }
+  if (senderSignatureFields.some((field) => !(field.value ?? '').trim())) {
+    builderError.value = 'Add your signature or initials to all of your signature fields before signing.';
+    return;
+  }
+  if (fields.value.length === 0) {
+    builderError.value = 'Place at least one field before signing.';
+    return;
+  }
+
+  signingNow.value = true;
+  try {
+    await saveDraft();
+    if (!doc.value || builderError.value) return;
+
+    const orderedSigners = [
+      senderSigner.value ?? { name: senderName.value, email: senderEmail.value },
+      ...recipientSigners.value,
+    ];
+    const response = await sendDocument(doc.value.id, {
+      signers: orderedSigners.map((signer, index) => ({
+        email: signer.email,
+        name: signer.name,
+        order: index + 1,
+      })),
+      inviteStrategy: 'sequential',
+    });
+
+    const signingToken = response.signingToken;
+    if (!signingToken) {
+      builderError.value = 'Unable to start the signing session.';
+      return;
+    }
+
+    const senderFields = getSenderFields();
+    const signatureArtifact = resolveSignatureArtifact(senderFields);
+    if (!signatureArtifact) {
+      builderError.value = 'Add a signature before signing.';
+      return;
+    }
+
+    const correlationId = createId();
+    const session = await createSigningSession(doc.value.id, signingToken, createId(), correlationId);
+    const fieldsPayload = senderFields.map((field) => ({
+      fieldId: field.id,
+      value: resolveSenderFieldValue(field),
+    }));
+
+    await submitManifest({
+      docId: doc.value.id,
+      signingToken,
+      signingSessionId: session.data.signingSessionId,
+      fields: fieldsPayload,
+      correlationId,
+    });
+
+    await uploadSignature({
+      docId: doc.value.id,
+      signingToken,
+      signingSessionId: session.data.signingSessionId,
+      type: signatureArtifact.type,
+      data: signatureArtifact.data,
+      correlationId,
+    });
+
+    await applySignature({
+      docId: doc.value.id,
+      signingToken,
+      signingSessionId: session.data.signingSessionId,
+      correlationId,
+    });
+
+    await loadDocument(doc.value.id);
+    setBuilderNotice('Signature applied. Inviting the next signer.');
+  } catch (err) {
+    builderError.value = err instanceof Error ? err.message : 'Unable to sign and send.';
+  } finally {
+    signingNow.value = false;
+  }
 };
 
 const sendForSigning = async () => {
   builderError.value = '';
+  builderNotice.value = '';
+  if (savingDraft.value || signingNow.value) return;
   if (!doc.value) return;
   if (!isPdfPreview.value) {
     builderError.value = 'Convert this document to PDF before sending for signatures.';
@@ -1975,13 +2371,46 @@ const sendForSigning = async () => {
       : 'Add at least one signer before sending.';
     return;
   }
-  await sendDocument(doc.value.id, {
-    signers: signerInputs.value.map((signer, index) => ({
+  if (!senderEmail.value) {
+    builderError.value = 'Add your email before starting the signing session.';
+    return;
+  }
+  if (fields.value.length === 0) {
+    builderError.value = 'Place at least one field before sending.';
+    return;
+  }
+  if (signingIntent.value === 'send') {
+    const hasSenderFields = fields.value.some(
+      (field) => field.signerEmail?.toLowerCase() === senderEmail.value,
+    );
+    if (!hasSenderFields) {
+      builderError.value = 'Assign at least one field to yourself before sending.';
+      return;
+    }
+  }
+  if (signingIntent.value === 'self') {
+    await saveDraft();
+    if (builderError.value) return;
+    builderNotice.value = '';
+  }
+  const orderedSigners = signingIntent.value === 'send'
+    ? [senderSigner.value ?? { name: senderName.value, email: senderEmail.value }, ...recipientSigners.value]
+    : [{ name: senderName.value, email: senderEmail.value }];
+  const response = await sendDocument(doc.value.id, {
+    signers: orderedSigners.map((signer, index) => ({
       email: signer.email,
       name: signer.name,
       order: index + 1,
     })),
+    inviteStrategy: 'sequential',
   });
+  if (signingIntent.value === 'self') {
+    await refresh();
+  }
+  if (response.signingToken) {
+    await router.push(`/sign/${response.signingToken}`);
+    return;
+  }
   await loadDocument(doc.value.id);
 };
 
@@ -2005,13 +2434,13 @@ const proceedToBuilder = async (options?: { allowMissingSigners?: boolean }) => 
   builderError.value = '';
   await nextTick();
   if (pdfDoc.value) {
-    await renderAllPages();
-    await renderThumbnails();
+    await enqueueRenderAllPages();
+    await enqueueRenderThumbnails();
   }
 };
 
 watch(scale, () => {
-  void renderAllPages();
+  void enqueueRenderAllPages();
 });
 
 watch(signatureModalOpen, (open) => {
@@ -2031,16 +2460,20 @@ watch(signatureMode, async (mode) => {
 });
 
 watch(email, () => {
-  if (signingIntent.value === 'self' && signerInputs.value.length === 0) {
+  if (signingIntent.value === 'self') {
     addSelfSigner();
+    return;
+  }
+  if (signingIntent.value === 'send') {
+    ensureSenderSigner();
   }
 });
 
 watch(workflowStep, async (step) => {
   if (step !== 2 || !pdfDoc.value || !isPdfPreview.value) return;
   await nextTick();
-  await renderAllPages();
-  await renderThumbnails();
+  await enqueueRenderAllPages();
+  await enqueueRenderThumbnails();
 });
 
 onMounted(async () => {
@@ -2053,6 +2486,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handlePointerMove);
   window.removeEventListener('pointerup', handlePointerUp);
   window.removeEventListener('resize', resizeSignatureCanvas);
+  if (builderNoticeTimer) {
+    window.clearTimeout(builderNoticeTimer);
+    builderNoticeTimer = null;
+  }
   pdfLoadToken.value += 1;
   pdfDoc.value?.destroy();
   pdfDoc.value = null;
@@ -2166,7 +2603,8 @@ onBeforeUnmount(() => {
 
 .choice-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 280px));
+  justify-content: center;
   gap: 1.2rem;
 }
 
@@ -2224,11 +2662,12 @@ onBeforeUnmount(() => {
 .stage-setup {
   display: grid;
   align-items: start;
+  position: relative;
 }
 
 .setup-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.2rem;
 }
 
@@ -2441,6 +2880,12 @@ onBeforeUnmount(() => {
 .builder-error {
   margin: 0;
   color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.builder-success {
+  margin: 0;
+  color: var(--success);
   font-size: 0.9rem;
 }
 
@@ -3152,11 +3597,15 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   box-shadow: none;
   transition: border-color 0.2s ease;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.7rem 0.9rem;
-  min-height: 64px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 1 / 1;
 }
 
 .choice-card:hover {
@@ -3360,6 +3809,10 @@ onBeforeUnmount(() => {
   color: #0f172a;
 }
 
+.page-wrap .field-label {
+  display: none;
+}
+
 .field-label {
   font-size: 0.65rem;
   letter-spacing: 0.02em;
@@ -3426,6 +3879,116 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
+.setup-shell {
+  position: relative;
+  min-height: 70vh;
+}
+
+.setup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(2px);
+  z-index: 20;
+}
+
+.setup-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(520px, 100%);
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 40px rgba(15, 23, 42, 0.25);
+  z-index: 30;
+  padding: 1rem 1.4rem 2rem;
+  display: grid;
+  gap: 1rem;
+  overflow-y: auto;
+  animation: setup-drawer-slide 220ms ease;
+}
+
+.setup-drawer-top {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.setup-drawer-pill {
+  flex: 1;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 0.45rem 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+}
+
+.drawer-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.drawer-meta {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.setup-header {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.setup-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.panel-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.panel-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.summary-card h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+@keyframes setup-drawer-slide {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 @media (max-width: 1200px) {
   .workflow-header {
     flex-direction: column;
@@ -3448,7 +4011,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 960px) {
   .choice-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 280px);
+    justify-content: center;
+  }
+
+  .setup-drawer {
+    width: 100%;
+    border-left: none;
   }
 }
 </style>

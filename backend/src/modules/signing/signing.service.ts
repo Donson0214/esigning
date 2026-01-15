@@ -150,6 +150,11 @@ export async function viewSigningSession(token: string, meta: RequestMeta) {
     }
   }
 
+  const filePath =
+    signer.document.signedFileUrl ||
+    signer.document.signedFilePublicId ||
+    signer.document.fileUrl ||
+    signer.document.filePublicId;
   return {
     signer: {
       id: signer.id,
@@ -160,7 +165,7 @@ export async function viewSigningSession(token: string, meta: RequestMeta) {
     document: {
       id: signer.document.id,
       title: signer.document.title,
-      fileUrl: await createSignedUrl(signer.document.fileUrl).catch(() => signer.document.fileUrl),
+      fileUrl: filePath ? await createSignedUrl(filePath).catch(() => filePath) : '',
       status: signer.document.status,
     },
     fields: signer.fields,

@@ -60,6 +60,11 @@ export type DocumentListResponse = {
   documents: Document[];
 };
 
+export type ReceivedSummaryResponse = {
+  pendingCount: number;
+  total: number;
+};
+
 export type DocumentAuditReport = {
   document: {
     id: string;

@@ -46,6 +46,15 @@ export async function listDocuments(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function listReceivedSummary(req: Request, res: Response, next: NextFunction) {
+  try {
+    const summary = await documentService.getReceivedSummary(req.user!.id);
+    res.json(summary);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getDocument(req: Request, res: Response, next: NextFunction) {
   try {
     const documentId = getParam(req.params.id);

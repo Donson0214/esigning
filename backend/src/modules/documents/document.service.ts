@@ -234,6 +234,34 @@ export async function listDocuments(ownerId: string) {
   return Promise.all(documents.map((document) => withAccessUrls(document)));
 }
 
+export async function getReceivedSummary(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  if (!user?.email) {
+    throw createHttpError(404, 'USER_NOT_FOUND', 'User not found');
+  }
+  const email = user.email.toLowerCase();
+  const baseWhere = {
+    email,
+    document: {
+      ownerId: { not: userId },
+      status: {
+        notIn: [DocumentStatus.COMPLETED, DocumentStatus.DECLINED, DocumentStatus.EXPIRED],
+      },
+    },
+  };
+  const pendingCount = await prisma.signer.count({
+    where: {
+      ...baseWhere,
+      status: { in: [SignerStatus.PENDING, SignerStatus.VIEWED] },
+    },
+  });
+  const total = await prisma.signer.count({ where: baseWhere });
+  return { pendingCount, total };
+}
+
 export async function getDocument(ownerId: string, documentId: string) {
   const document = await prisma.document.findFirst({
     where: { id: documentId, ownerId },
@@ -286,25 +314,36 @@ export async function sendDocument(params: {
     throw createHttpError(400, 'DUPLICATE_SIGNERS', 'Signer emails must be unique');
   }
 
+  const inviteStrategy = payload.inviteStrategy ?? 'immediate';
+  const signerOrders = payload.signers.map((signer, index) => signer.order ?? index + 1);
+  const firstOrder = signerOrders.length ? Math.min(...signerOrders) : 1;
+  const ownerEmail = owner?.email?.trim().toLowerCase();
   const expiresAt = new Date(Date.now() + env.signingLinkTtlMinutes * 60 * 1000);
   const signerTokens: Record<string, string> = {};
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const createdSigners = [];
+    const invitedEmails: string[] = [];
     for (const [index, signer] of payload.signers.entries()) {
+      const order = signer.order ?? index + 1;
       const token = generateToken();
-      signerTokens[signer.email.toLowerCase()] = token;
+      const normalizedEmail = signer.email.toLowerCase();
+      signerTokens[normalizedEmail] = token;
+      const shouldInviteNow = inviteStrategy === 'immediate' || order === firstOrder;
       const created = await tx.signer.create({
         data: {
           documentId: document.id,
           name: signer.name ?? null,
-          email: signer.email.toLowerCase(),
+          email: normalizedEmail,
           status: SignerStatus.PENDING,
-          signOrder: signer.order ?? index + 1,
+          signOrder: order,
           signingTokenHash: hashToken(token),
-          signingTokenExpiresAt: expiresAt,
+          signingTokenExpiresAt: shouldInviteNow ? expiresAt : null,
         },
       });
+      if (shouldInviteNow) {
+        invitedEmails.push(created.email);
+      }
       createdSigners.push(created);
     }
 
@@ -392,10 +431,17 @@ export async function sendDocument(params: {
       },
     });
 
-    return { updated, createdSigners, createdFields, auditEvent };
+    return { updated, createdSigners, createdFields, auditEvent, invitedEmails };
   });
 
+  const invitedEmailSet = new Set(result.invitedEmails);
   for (const signer of result.createdSigners) {
+    if (!invitedEmailSet.has(signer.email)) {
+      continue;
+    }
+    if (ownerEmail && signer.email === ownerEmail && inviteStrategy === 'sequential') {
+      continue;
+    }
     const token = signerTokens[signer.email];
     if (!token) {
       throw createHttpError(500, 'SIGNING_TOKEN_MISSING', 'Signing token missing');
@@ -541,7 +587,9 @@ export async function sendDocument(params: {
     console.warn('Notification dispatch failed', err);
   }
 
-  return withAccessUrls(result.updated);
+  const signingToken = ownerEmail ? signerTokens[ownerEmail] : undefined;
+  const response = await withAccessUrls(result.updated);
+  return { ...response, signingToken, inviteStrategy };
 }
 
 export async function getDocumentStats(ownerId: string) {

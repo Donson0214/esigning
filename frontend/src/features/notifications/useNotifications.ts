@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue';
-import type { EventEnvelope } from '@shared/events';
+import type { AnyEventEnvelope } from '@shared/events';
 import { connectSocket, onSocketEvent } from '@/shared/lib/socket';
 import { fetchNotifications, markNotificationsRead } from './api';
 import type { NotificationRecord, NotificationResponse } from './types';
@@ -36,7 +36,7 @@ const addNotification = (notification: NotificationRecord) => {
   }
 };
 
-const handleSocketEvent = (event: EventEnvelope) => {
+const handleSocketEvent = (event: AnyEventEnvelope) => {
   if (event.event === 'notification.created') {
     const notification = event.data.notification as NotificationRecord;
     addNotification(notification);
@@ -55,13 +55,13 @@ const handleSocketEvent = (event: EventEnvelope) => {
   if (event.event === 'notification.read') {
     const ids = event.data.notificationIds ?? [];
     if (event.data.all) {
-      notifications.value = notifications.value.map((item) => ({ ...item, isRead: true }));
+      notifications.value = notifications.value.map((item: NotificationRecord) => ({ ...item, isRead: true }));
       unreadCount.value = 0;
       return;
     }
     if (ids.length === 0) return;
     let updated = 0;
-    notifications.value = notifications.value.map((item) => {
+    notifications.value = notifications.value.map((item: NotificationRecord) => {
       if (ids.includes(item.id) && !item.isRead) {
         updated += 1;
         return { ...item, isRead: true };
@@ -88,7 +88,7 @@ const markRead = async (ids: string[]) => {
   if (ids.length === 0) return;
   try {
     const response = await markNotificationsRead({ ids });
-    notifications.value = notifications.value.map((item) =>
+    notifications.value = notifications.value.map((item: NotificationRecord) =>
       ids.includes(item.id) ? { ...item, isRead: true } : item,
     );
     unreadCount.value = response.unreadCount;
@@ -100,7 +100,7 @@ const markRead = async (ids: string[]) => {
 const markAllRead = async () => {
   try {
     const response = await markNotificationsRead({ all: true });
-    notifications.value = notifications.value.map((item) => ({ ...item, isRead: true }));
+    notifications.value = notifications.value.map((item: NotificationRecord) => ({ ...item, isRead: true }));
     unreadCount.value = response.unreadCount;
   } catch {
     // ignore update failures

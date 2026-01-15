@@ -20,6 +20,7 @@ export type SigningSessionView = {
     type: FieldType;
     label?: string | null;
     required?: boolean;
+    value?: string | null;
     options?: Record<string, unknown> | null;
     page: number;
     x: number;

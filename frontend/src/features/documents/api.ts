@@ -1,10 +1,15 @@
 import { apiClient } from '@/shared/lib/axios';
 import { requestWithCorrelation } from '@/shared/lib/request';
-import type { Document, DocumentAuditReport, DocumentListResponse, DocumentField } from './types';
+import type { Document, DocumentAuditReport, DocumentListResponse, DocumentField, ReceivedSummaryResponse } from './types';
 
 export async function listDocuments() {
   const response = await apiClient.get<DocumentListResponse>('/documents');
   return response.data.documents;
+}
+
+export async function getReceivedSummary() {
+  const response = await apiClient.get<ReceivedSummaryResponse>('/documents/received/summary');
+  return response.data;
 }
 
 export async function getDocument(documentId: string) {
@@ -88,8 +93,12 @@ export async function sendDocument(
       width: number;
       height: number;
     }>;
+    inviteStrategy?: 'immediate' | 'sequential';
   },
 ) {
-  const response = await apiClient.post<Document>(`/documents/${documentId}/send`, payload);
+  const response = await apiClient.post<Document & { signingToken?: string; inviteStrategy?: string }>(
+    `/documents/${documentId}/send`,
+    payload,
+  );
   return response.data;
 }

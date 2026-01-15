@@ -242,6 +242,7 @@ const pageRefs = new Map<number, HTMLDivElement>();
 const canvasRefs = new Map<number, HTMLCanvasElement>();
 const pdfError = ref('');
 const pdfLoadToken = ref(0);
+let renderAllPagesQueue: Promise<void> = Promise.resolve();
 
 const signatureMode = ref<'draw' | 'type' | 'upload'>('draw');
 const typedSignature = ref('');
@@ -266,6 +267,14 @@ const placementStorageKey = computed(() =>
 
 const isSignatureField = (field: SigningSessionView['fields'][number]) =>
   field.type === 'SIGNATURE' || field.type === 'INITIAL';
+const isSignatureDataUrl = (value: string) => value.startsWith('data:image');
+
+const getSignatureMeta = (field: SigningSessionView['fields'][number]) => {
+  if (!field.options || typeof field.options !== 'object') return null;
+  const signature = (field.options as Record<string, unknown>).signature;
+  if (!signature || typeof signature !== 'object') return null;
+  return signature as { mode?: 'draw' | 'type' | 'upload'; font?: string };
+};
 
 const signatureFields = computed(() => fields.value.filter(isSignatureField));
 const missingSignatureCount = computed(
@@ -292,9 +301,144 @@ const activeSignature = computed<SignaturePayload | null>(() => {
   return { type: 'TYPED', text, font: signatureFont };
 });
 
+const getFieldChoices = (field: SigningSessionView['fields'][number]) => {
+  if (!field.options || typeof field.options !== 'object') return [];
+  const choices = (field.options as Record<string, unknown>).choices;
+  if (!Array.isArray(choices)) return [];
+  return choices.filter((choice) => typeof choice === 'string' && choice.trim().length > 0);
+};
+
+const buildSignatureFromField = (field: SigningSessionView['fields'][number]) => {
+  const value = field.value?.trim();
+  if (!value) return null;
+  const meta = getSignatureMeta(field);
+  if (isSignatureDataUrl(value)) {
+    const mode = meta?.mode;
+    const signature = {
+      type: mode === 'draw' ? 'DRAWN' : 'UPLOADED',
+      dataUrl: value,
+    } as SignaturePayload;
+    return normalizeSignatureForField(field, signature);
+  }
+  const signature = {
+    type: 'TYPED',
+    text: value,
+    font: meta?.font ?? signatureFont,
+  } as SignaturePayload;
+  return normalizeSignatureForField(field, signature);
+};
+
+const resolveFieldValue = (field: SigningSessionView['fields'][number]) => {
+  if (field.value && field.value.trim()) return field.value;
+  const fallbackName = signer.value?.name ?? signer.value?.email ?? 'Signed';
+  switch (field.type) {
+    case 'DATE':
+      return new Date().toISOString().slice(0, 10);
+    case 'EMAIL':
+      return signer.value?.email ?? fallbackName;
+    case 'FULL_NAME':
+      return signer.value?.name ?? signer.value?.email ?? fallbackName;
+    case 'CHECKBOX':
+      return 'checked';
+    case 'DROPDOWN':
+    case 'RADIO': {
+      const firstChoice = getFieldChoices(field)[0];
+      return firstChoice ?? fallbackName;
+    }
+    case 'COMPANY':
+    case 'JOB_TITLE':
+    case 'TEXT':
+      return fallbackName;
+    case 'IMAGE':
+    case 'ATTACHMENT':
+      return field.value ?? 'Attached';
+    default:
+      return fallbackName;
+  }
+};
+
+const signatureValueForPlacement = (placement?: SignaturePlacement) =>
+  placement?.signature.dataUrl ?? placement?.signature.text ?? '';
+
+const getInitialsFromText = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const source = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
+  const parts = source.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (parts.length === 0) {
+    return trimmed.slice(0, 2).toUpperCase();
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return parts
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+};
+
+const getSignerInitials = () => {
+  const fallback = typedSignature.value.trim() || signer.value?.name || signer.value?.email || '';
+  return getInitialsFromText(fallback) || 'IN';
+};
+
+const normalizeSignatureForField = (
+  field: SigningSessionView['fields'][number],
+  signature: SignaturePayload,
+) => {
+  if (field.type !== 'INITIAL') return signature;
+  const baseText =
+    signature.text ??
+    typedSignature.value.trim() ??
+    signer.value?.name ??
+    signer.value?.email ??
+    '';
+  const initials = getInitialsFromText(baseText) || getSignerInitials();
+  const metaFont = getSignatureMeta(field)?.font;
+  return {
+    type: 'TYPED',
+    text: initials,
+    font: signature.font ?? metaFont ?? signatureFont,
+  } as SignaturePayload;
+};
+
+const resolveSignatureValue = (
+  field: SigningSessionView['fields'][number],
+  placement?: SignaturePlacement,
+) => {
+  if (!placement) return '';
+  if (field.type === 'INITIAL') {
+    const baseText =
+      placement.signature.text ??
+      typedSignature.value.trim() ??
+      signer.value?.name ??
+      signer.value?.email ??
+      '';
+    return getInitialsFromText(baseText) || getSignerInitials();
+  }
+  return signatureValueForPlacement(placement);
+};
+
+const resolveSignatureArtifact = () => {
+  const signatureField = fields.value.find(
+    (field) => field.type === 'SIGNATURE' && placements.value[field.id],
+  );
+  const signatureFromField = signatureField ? placements.value[signatureField.id]?.signature : undefined;
+  const placementSignature =
+    signatureFromField ?? Object.values(placements.value)[0]?.signature ?? activeSignature.value;
+  if (placementSignature?.dataUrl) {
+    return { type: placementSignature.type, data: placementSignature.dataUrl };
+  }
+  if (placementSignature?.text) {
+    return { type: 'TYPED' as const, data: placementSignature.text };
+  }
+  const fallback = typedSignature.value.trim() || signer.value?.name || signer.value?.email || 'Signed';
+  return { type: 'TYPED' as const, data: fallback };
+};
+
 const canSign = computed(() => {
   if (!doc.value || !sessionView.value) return false;
-  if (!activeSignature.value) return false;
   return missingSignatureCount.value === 0;
 });
 
@@ -364,10 +508,14 @@ const fieldClass = (field: SigningSessionView['fields'][number]) => [
 ];
 
 const fieldLabel = (field: SigningSessionView['fields'][number]) => field.label || field.type.replace('_', ' ');
-const signatureTextStyle = (field: SigningSessionView['fields'][number]) => ({
-  fontSize: `${Math.min(18, field.height) * scale.value}px`,
-  fontFamily: signatureFont,
-});
+const signatureTextStyle = (field: SigningSessionView['fields'][number]) => {
+  const placementFont = placements.value[field.id]?.signature.font;
+  const metaFont = getSignatureMeta(field)?.font;
+  return {
+    fontSize: `${Math.min(18, field.height) * scale.value}px`,
+    fontFamily: placementFont ?? metaFont ?? signatureFont,
+  };
+};
 
 const setPageRef = (page: number) => (el: HTMLDivElement | null) => {
   if (el) pageRefs.set(page, el);
@@ -390,13 +538,14 @@ const placeSignature = (field: SigningSessionView['fields'][number], signature?:
   const size = pageSizes.value[field.page];
   if (!size) return;
   const normalized = resolveNormalizedRect(field, size);
+  const normalizedSignature = normalizeSignatureForField(field, nextSignature);
   placements.value = {
     ...placements.value,
     [field.id]: {
       fieldId: field.id,
       page: field.page,
       normalized,
-      signature: { ...nextSignature },
+      signature: { ...normalizedSignature },
     },
   };
 };
@@ -432,16 +581,39 @@ const loadPlacements = () => {
   try {
     const parsed = JSON.parse(raw) as SignaturePlacement[];
     const fieldIds = new Set(fields.value.map((field) => field.id));
+    const fieldMap = new Map(fields.value.map((field) => [field.id, field]));
     const next: Record<string, SignaturePlacement> = {};
     parsed.forEach((item) => {
       if (!item || !fieldIds.has(item.fieldId)) return;
       if (!item.normalized || !item.signature) return;
-      next[item.fieldId] = item;
+      const field = fieldMap.get(item.fieldId);
+      const signature = field ? normalizeSignatureForField(field, item.signature) : item.signature;
+      next[item.fieldId] = { ...item, signature };
     });
     placements.value = next;
   } catch {
     placements.value = {};
   }
+};
+
+const seedPlacementsFromFields = () => {
+  if (!fields.value.length) return;
+  const next = { ...placements.value };
+  for (const field of fields.value) {
+    if (!isSignatureField(field)) continue;
+    if (next[field.id]) continue;
+    const signature = buildSignatureFromField(field);
+    if (!signature) continue;
+    const size = pageSizes.value[field.page];
+    if (!size) continue;
+    next[field.id] = {
+      fieldId: field.id,
+      page: field.page,
+      normalized: resolveNormalizedRect(field, size),
+      signature: { ...signature },
+    };
+  }
+  placements.value = next;
 };
 
 const handleDrop = (event: DragEvent, page: number) => {
@@ -494,13 +666,14 @@ const loadSession = async () => {
     await nextTick();
     await loadPdf();
     loadPlacements();
+    seedPlacementsFromFields();
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Unable to load signing session.';
   }
 };
 
 const signDocument = async () => {
-  if (!doc.value || !sessionView.value || !canSign.value || !activeSignature.value) return;
+  if (!doc.value || !sessionView.value || !canSign.value) return;
   errorMessage.value = '';
 
   const optimistic = optimisticManager.begin(doc.value, {
@@ -514,15 +687,13 @@ const signDocument = async () => {
     const correlationId = optimistic.mutation.correlationId;
     const session = await createSigningSession(doc.value.id, token.value, clientMutationId, correlationId);
 
-    const signatureValue =
-      activeSignature.value.type === 'TYPED'
-        ? activeSignature.value.text || typedSignature.value.trim()
-        : typedSignature.value.trim() || signer.value?.email || 'Signed';
-
-    const fieldsPayload = sessionView.value.fields.map((field) => ({
-      fieldId: field.id,
-      value: field.type === 'DATE' ? new Date().toISOString().slice(0, 10) : signatureValue,
-    }));
+    const fieldsPayload = sessionView.value.fields.map((field) => {
+      if (isSignatureField(field)) {
+        const placement = placements.value[field.id];
+        return { fieldId: field.id, value: resolveSignatureValue(field, placement) };
+      }
+      return { fieldId: field.id, value: resolveFieldValue(field) };
+    });
 
     await submitManifest({
       docId: doc.value.id,
@@ -532,14 +703,14 @@ const signDocument = async () => {
       correlationId,
     });
 
-    const signatureData = activeSignature.value.dataUrl ?? activeSignature.value.text ?? '';
+    const signatureArtifact = resolveSignatureArtifact();
 
     await uploadSignature({
       docId: doc.value.id,
       signingToken: token.value,
       signingSessionId: session.data.signingSessionId,
-      type: activeSignature.value.type,
-      data: signatureData,
+      type: signatureArtifact.type,
+      data: signatureArtifact.data,
       correlationId,
     });
 
@@ -717,13 +888,24 @@ const loadPdf = async () => {
   pdfError.value = '';
   try {
     if (!doc.value?.fileUrl) return;
-    const pdf = await getDocument(doc.value.fileUrl).promise;
+    let pdf: PDFDocumentProxy | null = null;
+    try {
+      const response = await fetch(doc.value.fileUrl);
+      if (!response.ok) {
+        throw new Error('Preview unavailable');
+      }
+      const data = await response.arrayBuffer();
+      if (tokenId !== pdfLoadToken.value) return;
+      pdf = await getDocument({ data }).promise;
+    } catch {
+      pdf = await getDocument(doc.value.fileUrl).promise;
+    }
     if (tokenId !== pdfLoadToken.value) return;
     pdfDoc.value?.destroy();
     pdfDoc.value = pdf;
     pageCount.value = pdf.numPages;
     pageSizes.value = {};
-    await renderAllPages(tokenId);
+    await enqueueRenderAllPages(tokenId);
   } catch (err) {
     if (tokenId !== pdfLoadToken.value) return;
     pdfDoc.value?.destroy();
@@ -757,18 +939,25 @@ const renderAllPages = async (tokenId = pdfLoadToken.value) => {
   }
 };
 
+const enqueueRenderAllPages = (tokenId = pdfLoadToken.value) => {
+  renderAllPagesQueue = renderAllPagesQueue
+    .catch(() => undefined)
+    .then(() => renderAllPages(tokenId));
+  return renderAllPagesQueue;
+};
+
 const zoomIn = async () => {
   scale.value = Math.min(2, scale.value + 0.1);
-  await renderAllPages();
+  await enqueueRenderAllPages();
 };
 
 const zoomOut = async () => {
   scale.value = Math.max(0.6, scale.value - 0.1);
-  await renderAllPages();
+  await enqueueRenderAllPages();
 };
 
 watch(scale, () => {
-  void renderAllPages();
+  void enqueueRenderAllPages();
 });
 
 watch(signatureMode, () => {
@@ -779,9 +968,12 @@ watch(signatureMode, () => {
 
 watch(activeSignature, (next) => {
   if (!next || placementCount.value === 0) return;
+  const fieldMap = new Map(fields.value.map((field) => [field.id, field]));
   const updated: Record<string, SignaturePlacement> = {};
   Object.entries(placements.value).forEach(([key, placement]) => {
-    updated[key] = { ...placement, signature: { ...next } };
+    const field = fieldMap.get(key);
+    const normalizedSignature = field ? normalizeSignatureForField(field, next) : next;
+    updated[key] = { ...placement, signature: { ...normalizedSignature } };
   });
   placements.value = updated;
 });
@@ -960,6 +1152,10 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--ink-strong);
   z-index: 1;
+}
+
+.page-wrap .field-label {
+  display: none;
 }
 
 .field-clear {

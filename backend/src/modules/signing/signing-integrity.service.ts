@@ -16,7 +16,7 @@ import { computeManifestHash } from '../../utils/manifest.util';
 import { parseDataUrl } from '../../utils/signature.util';
 import { downloadStoredFile, uploadBufferToSupabase } from '../../utils/supabase.util';
 import { applySignatureToPdf } from '../../utils/pdf-signature.util';
-import { hmacSha256Hex } from '../../utils/crypto.util';
+import { generateToken, hashToken, hmacSha256Hex } from '../../utils/crypto.util';
 import { generateCertificatePdf } from '../../utils/pdf.util';
 import { AUDIT_EVENT_LABELS } from '../audit/audit.constants';
 import { isSignerInOrder } from '../../utils/signing-order.util';
@@ -87,6 +87,90 @@ function assertDocumentWritable(document: { lockedAt: Date | null; status: Docum
   if (document.status === DocumentStatus.DECLINED || document.status === DocumentStatus.EXPIRED) {
     throw createHttpError(409, 'DOC_LOCKED', 'Document is no longer active');
   }
+}
+
+async function inviteNextSigner(params: {
+  documentId: string;
+  ownerId: string;
+  ownerName: string;
+  ownerEmail?: string | null;
+  documentTitle: string;
+  meta: RequestMeta;
+}) {
+  const nextSigner = await prisma.signer.findFirst({
+    where: {
+      documentId: params.documentId,
+      status: SignerStatus.PENDING,
+      signingTokenExpiresAt: null,
+    },
+    orderBy: { signOrder: 'asc' },
+  });
+  if (!nextSigner) return null;
+
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + env.signingLinkTtlMinutes * 60 * 1000);
+  const updatedSigner = await prisma.signer.update({
+    where: { id: nextSigner.id },
+    data: {
+      signingTokenHash: hashToken(token),
+      signingTokenExpiresAt: expiresAt,
+    },
+  });
+
+  const link = `${env.signingAppUrl}/${token}`;
+  const emailMessage = buildNotificationEmail('signer.invited', {
+    recipientName: updatedSigner.name ?? updatedSigner.email,
+    documentTitle: params.documentTitle,
+    senderName: params.ownerName,
+    orgName: params.ownerName,
+    actionUrl: link,
+    expiresAt: expiresAt.toISOString(),
+  });
+
+  try {
+    await notifyUserByEmail({
+      email: updatedSigner.email,
+      forceEmail: true,
+      input: {
+        eventType: 'signer.invited',
+        orgId: params.ownerId,
+        docId: updatedSigner.documentId,
+        actor: { userId: params.ownerId, role: 'SENDER', email: params.ownerEmail ?? undefined },
+        title: 'Document invitation',
+        message: `${params.ownerName} invited you to sign "${params.documentTitle}".`,
+        link,
+        payload: {
+          documentId: updatedSigner.documentId,
+          signerId: updatedSigner.id,
+          signerEmail: updatedSigner.email,
+          documentTitle: params.documentTitle,
+        },
+        idempotencyKey: `signer-invited:${updatedSigner.id}`,
+        email: {
+          to: updatedSigner.email,
+          subject: emailMessage.subject,
+          text: emailMessage.text,
+          html: emailMessage.html,
+        },
+      },
+    });
+  } catch (err) {
+    console.warn('Signer notification failed', err);
+  }
+
+  await emitEvent(
+    createEvent({
+      event: 'notifications.email.queued',
+      orgId: params.ownerId,
+      docId: updatedSigner.documentId,
+      actor: { userId: params.ownerId, role: 'SENDER' },
+      correlationId: params.meta.correlationId,
+      data: { to: updatedSigner.email, template: 'signing-request', signerId: updatedSigner.id },
+    }),
+    'org',
+  );
+
+  return updatedSigner;
 }
 
 export async function precomputeDocumentHash(ownerId: string, documentId: string, meta: RequestMeta) {
@@ -860,6 +944,17 @@ export async function applySignature(params: {
     });
   } catch (err) {
     console.warn('Signer notification failed', err);
+  }
+
+  if (result.remaining > 0) {
+    await inviteNextSigner({
+      documentId: signer.documentId,
+      ownerId: signer.document.ownerId,
+      ownerName,
+      ownerEmail: owner?.email ?? null,
+      documentTitle: signer.document.title,
+      meta: params.meta,
+    });
   }
 
   return { postHash, documentVersion: result.updated.version, status: result.updated.status };

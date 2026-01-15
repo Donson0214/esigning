@@ -12,6 +12,7 @@ import {
   getDocumentPreviewUrl,
   getStats,
   listDocuments,
+  listReceivedSummary,
   sendDocument,
   updateField,
 } from './document.controller';
@@ -20,6 +21,7 @@ export const documentRoutes = Router();
 
 documentRoutes.use(requireAuth);
 documentRoutes.get('/', listDocuments);
+documentRoutes.get('/received/summary', listReceivedSummary);
 documentRoutes.get('/stats', getStats);
 documentRoutes.post('/', uploadDocument, createDocument);
 documentRoutes.get('/:id/preview-url', getDocumentPreviewUrl);

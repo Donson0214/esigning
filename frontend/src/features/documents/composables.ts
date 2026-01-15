@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import type { EventEnvelope } from '@shared/events';
+import type { AnyEventEnvelope, DocumentSummary } from '@shared/events';
 import { connectSocket, joinDocument, leaveDocument, onSocketEvent, syncDocumentEvents } from '@/shared/lib/socket';
-import { listDocuments, getDocument, completeDocument as completeDocumentApi } from './api';
+import { listDocuments, getDocument, completeDocument as completeDocumentApi, getReceivedSummary } from './api';
 import type { Document } from './types';
 import { documentReducer, type DocumentMachineState } from './state-machine';
 import { createDocumentOptimisticManager, optimisticDocumentCompleted } from './optimistic';
@@ -24,9 +24,30 @@ export const useDocuments = () => {
     }
   };
 
-  const applyEvent = (event: EventEnvelope) => {
+  const applySummary = (summary: DocumentSummary) => {
+    const index = documents.value.findIndex((doc: Document) => doc.id === summary.id);
+    if (index === -1) {
+      void refresh();
+      return;
+    }
+    const current = documents.value[index];
+    const next: Document = {
+      ...current,
+      title: summary.title,
+      status: summary.status,
+      version: summary.version,
+      updatedAt: summary.updatedAt ?? current.updatedAt,
+    };
+    documents.value = [
+      ...documents.value.slice(0, index),
+      next,
+      ...documents.value.slice(index + 1),
+    ];
+  };
+
+  const applyEvent = (event: AnyEventEnvelope) => {
     if (event.event === 'doc.created') {
-      documents.value = [event.data.document as Document, ...documents.value];
+      applySummary(event.data.document);
       return;
     }
     if (event.event === 'doc.signer.joined' && event.docId) {
@@ -38,12 +59,10 @@ export const useDocuments = () => {
       return;
     }
     if (event.event === 'doc.updated' || event.event === 'doc.completed') {
-      documents.value = documents.value.map((doc) => {
-        if (doc.id !== event.docId) return doc;
-        const incoming = event.data.document as Document;
-        if (incoming.version <= doc.version) return doc;
-        return { ...doc, ...incoming };
-      });
+      const summary = event.data.document;
+      const current = documents.value.find((doc: Document) => doc.id === summary.id);
+      if (current && summary.version <= current.version) return;
+      applySummary(summary);
     }
   };
 
@@ -134,12 +153,18 @@ export const useDocument = (documentId: string) => {
     }
   };
 
-  const applyEvent = (event: EventEnvelope) => {
+  const applyEvent = (event: AnyEventEnvelope) => {
     if (!doc.value || event.docId !== doc.value.id) return;
     if (event.event === 'doc.updated' || event.event === 'doc.completed') {
-      const incoming = event.data.document as Document;
-      if (incoming.version <= doc.value.version) return;
-      doc.value = optimisticManager.reconcile({ ...doc.value, ...incoming });
+      const summary = event.data.document;
+      if (summary.version <= doc.value.version) return;
+      doc.value = optimisticManager.reconcile({
+        ...doc.value,
+        title: summary.title,
+        status: summary.status,
+        version: summary.version,
+        updatedAt: summary.updatedAt ?? doc.value.updatedAt,
+      });
       updateMachine(doc.value);
     }
   };
@@ -167,5 +192,53 @@ export const useDocument = (documentId: string) => {
     error,
     fetchDoc,
     completeDocument,
+  };
+};
+
+const receivedPendingCount = ref(0);
+const receivedTotalCount = ref(0);
+const receivedLoading = ref(false);
+const receivedError = ref<string | null>(null);
+let receivedListenerAttached = false;
+
+const refreshReceivedSummary = async () => {
+  receivedLoading.value = true;
+  receivedError.value = null;
+  try {
+    const summary = await getReceivedSummary();
+    receivedPendingCount.value = summary.pendingCount;
+    receivedTotalCount.value = summary.total;
+  } catch (err) {
+    receivedError.value = err instanceof Error ? err.message : 'Unable to load received summary.';
+  } finally {
+    receivedLoading.value = false;
+  }
+};
+
+const handleReceivedEvent = (event: AnyEventEnvelope) => {
+  if (event.event === 'notification.created' || event.event === 'notification.read') {
+    void refreshReceivedSummary();
+  }
+};
+
+const attachReceivedListener = () => {
+  if (receivedListenerAttached) return;
+  receivedListenerAttached = true;
+  connectSocket();
+  onSocketEvent(handleReceivedEvent);
+  void refreshReceivedSummary();
+};
+
+export const useReceivedSummary = () => {
+  onMounted(() => {
+    attachReceivedListener();
+  });
+
+  return {
+    pendingCount: computed(() => receivedPendingCount.value),
+    totalCount: computed(() => receivedTotalCount.value),
+    loading: computed(() => receivedLoading.value),
+    error: computed(() => receivedError.value),
+    refresh: refreshReceivedSummary,
   };
 };
