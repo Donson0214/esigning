@@ -46,13 +46,15 @@ function renderEmailTemplate(template, data) {
     const senderName = data.senderName ? escapeHtml(data.senderName) : 'a teammate';
     const orgName = data.orgName ? escapeHtml(data.orgName) : 'your organization';
     const signerName = data.signerName ? escapeHtml(data.signerName) : 'A signer';
-    const expires = data.expiresAt ? `This link expires on ${escapeHtml(data.expiresAt)}.` : '';
     if (template === 'signer.invited') {
         const subject = `You've been invited to sign: ${documentTitle}`;
-        const text = `Hi ${recipientName},\n\n${senderName} invited you to sign "${documentTitle}".\n${expires}\nOpen the link: ${data.actionUrl}\n\nIf you did not expect this, you can ignore this email.`;
+        const expires = data.expiresAt ? `This link expires at ${data.expiresAt}.` : '';
+        const portalText = data.portalUrl ? `\nOr sign in here: ${data.portalUrl}` : '';
+        const text = `Hi ${recipientName},\n\n${senderName} invited you to sign "${documentTitle}".\n${expires ? `${expires}\n` : ''}Open the link: ${data.actionUrl}${portalText}\n\nIf you did not expect this, you can ignore this email.`;
         const body = `<p>Hi ${recipientName},</p>
       <p><strong>${senderName}</strong> invited you to sign "<strong>${documentTitle}</strong>".</p>
       ${expires ? `<p>${expires}</p>` : ''}
+      ${data.portalUrl ? `<p>Prefer your account? <a href="${data.portalUrl}">Sign in</a> to view it in Received.</p>` : ''}
       <p>If you did not expect this, you can ignore this email.</p>`;
         const { html } = buildEmailFrame({
             title: `Sign ${documentTitle}`,

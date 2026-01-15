@@ -17,6 +17,7 @@
         </button>
       </div>
     </header>
+    <p v-if="waitMessage" class="muted">{{ waitMessage }}</p>
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
     <section v-if="doc" class="builder-body">
@@ -71,7 +72,7 @@
                 :class="fieldClass(field)"
                 :style="fieldStyle(field, page)"
                 @click.stop="handleFieldClick(field)"
-                draggable="true"
+                :draggable="canSign"
                 @dragstart="startFieldDrag($event, field)"
                 @dragend="endFieldDrag"
               >
@@ -107,6 +108,7 @@
                   type="button"
                   @pointerdown.stop
                   @click.stop="clearPlacement(field.id)"
+                  :disabled="!canSign"
                 >
                   x
                 </button>
@@ -133,7 +135,8 @@
               :key="field.type"
               class="palette-item"
               type="button"
-              draggable="true"
+              :disabled="!canSign"
+              :draggable="canSign"
               @click="handlePaletteClick(field.type)"
               @dragstart="startPaletteDrag($event, field.type)"
               @dragend="endPaletteDrag"
@@ -153,7 +156,7 @@
 
         <div
           class="panel-section delete-zone"
-          :class="isDeleteZoneActive && 'active'"
+          :class="[isDeleteZoneActive && 'active', !canSign && 'disabled']"
           @dragover.prevent
           @dragenter.prevent="isDeleteZoneActive = true"
           @dragleave.prevent="isDeleteZoneActive = false"
@@ -240,8 +243,8 @@
         <div class="signature-palette">
           <div
             class="signature-chip"
-            :class="!activeSignature && 'disabled'"
-            :draggable="Boolean(activeSignature)"
+            :class="(!activeSignature || !canSign) && 'disabled'"
+            :draggable="Boolean(activeSignature && canSign)"
             @dragstart="startSignatureDrag"
             @dragend="endSignatureDrag"
           >
@@ -253,10 +256,20 @@
 
         <div class="signature-actions">
           <button class="link-btn" type="button" @click="clearSignature">Clear signature</button>
-          <button class="btn btn-outline" type="button" @click="clearPlacements" :disabled="!placementCount">
+          <button
+            class="btn btn-outline"
+            type="button"
+            @click="clearPlacements"
+            :disabled="!placementCount || !canSign"
+          >
             Clear placements
           </button>
-          <button class="btn btn-primary" type="button" @click="saveSignature" :disabled="!canSaveSignature">
+          <button
+            class="btn btn-primary"
+            type="button"
+            @click="saveSignature"
+            :disabled="!canSaveSignature || !canSign"
+          >
             Save signature
           </button>
         </div>
@@ -531,6 +544,7 @@ const activeSignature = computed<SignaturePayload | null>(() => {
 });
 
 const openSignatureModal = async () => {
+  if (!canSign.value) return;
   fieldModalOpen.value = false;
   signatureModalOpen.value = true;
   await nextTick();
@@ -547,6 +561,7 @@ const closeSignatureModal = () => {
 };
 
 const saveSignature = () => {
+  if (!canSign.value) return;
   errorMessage.value = '';
   const signature = activeSignature.value;
   if (!signature) {
@@ -569,6 +584,7 @@ const saveSignature = () => {
 };
 
 const handlePaletteClick = (type: SigningSessionView['fields'][number]['type']) => {
+  if (!canSign.value) return;
   errorMessage.value = '';
   activePaletteType.value = type;
   if (type === 'SIGNATURE' || type === 'INITIAL') {
@@ -588,6 +604,7 @@ const handlePaletteClick = (type: SigningSessionView['fields'][number]['type']) 
 };
 
 const startPaletteDrag = (event: DragEvent, type: SigningSessionView['fields'][number]['type']) => {
+  if (!canSign.value) return;
   draggingFieldType.value = type;
   if (type === 'SIGNATURE' || type === 'INITIAL') {
     draggingSignature.value = activeSignature.value;
@@ -618,6 +635,7 @@ const parseDraggedFieldId = (event: DragEvent) => {
 };
 
 const startFieldDrag = (event: DragEvent, field: SigningSessionView['fields'][number]) => {
+  if (!canSign.value) return;
   draggingFieldId.value = field.id;
   isFieldDragActive.value = true;
   draggingFieldType.value = null;
@@ -729,6 +747,10 @@ const removeFieldById = (fieldId: string) => {
 };
 
 const handleDeleteDrop = () => {
+  if (!canSign.value) {
+    isDeleteZoneActive.value = false;
+    return;
+  }
   if (draggingFieldId.value) {
     removeFieldById(draggingFieldId.value);
   }
@@ -876,7 +898,21 @@ const resolveSignatureArtifact = () => {
   return { type: 'TYPED' as const, data: fallback };
 };
 
-const canSign = computed(() => Boolean(doc.value && sessionView.value));
+const canSign = computed(() => {
+  if (!doc.value || !sessionView.value) return false;
+  const permission = sessionView.value.signer?.canSign;
+  return permission !== false;
+});
+
+const waitMessage = computed(() => {
+  if (!doc.value || !sessionView.value || canSign.value) return '';
+  const currentSigner = sessionView.value.signingOrder?.currentSigner;
+  if (currentSigner && currentSigner.id !== signer.value?.id) {
+    const label = currentSigner.name || currentSigner.email || 'the previous signer';
+    return `Waiting for ${label} to sign first.`;
+  }
+  return 'Waiting for your turn to sign.';
+});
 
 const statusClass = computed(() => {
   const status = doc.value?.status;
@@ -981,6 +1017,7 @@ const isFieldFilled = (field: SigningSessionView['fields'][number]) => {
 const fieldClass = (field: SigningSessionView['fields'][number]) => [
   isSignatureField(field) ? 'signature' : 'info',
   isFieldFilled(field) ? 'filled' : '',
+  !canSign.value ? 'blocked' : '',
 ];
 
 const fieldLabel = (field: SigningSessionView['fields'][number]) => field.label || field.type.replace('_', ' ');
@@ -1052,6 +1089,7 @@ const placeSignature = (field: SigningSessionView['fields'][number], signature?:
 };
 
 const handleFieldClick = (field: SigningSessionView['fields'][number]) => {
+  if (!canSign.value) return;
   if (isFieldDragActive.value) return;
   if (isSignatureField(field)) {
     if (!activeSignature.value) {
@@ -1065,12 +1103,14 @@ const handleFieldClick = (field: SigningSessionView['fields'][number]) => {
 };
 
 const clearPlacement = (fieldId: string) => {
+  if (!canSign.value) return;
   const next = { ...placements.value };
   delete next[fieldId];
   placements.value = next;
 };
 
 const clearPlacements = () => {
+  if (!canSign.value) return;
   placements.value = {};
   if (placementStorageKey.value) {
     localStorage.removeItem(placementStorageKey.value);
@@ -1202,6 +1242,14 @@ const createFieldAtPosition = async (
 };
 
 const handleDrop = async (event: DragEvent, page: number) => {
+  if (!canSign.value) {
+    draggingFieldType.value = null;
+    draggingSignature.value = null;
+    activePaletteType.value = null;
+    draggingFieldId.value = null;
+    isFieldDragActive.value = false;
+    return;
+  }
   const pageEl = pageRefs.get(page);
   const size = pageSizes.value[page];
   if (!pageEl || !size) return;
@@ -1284,6 +1332,7 @@ const handleDrop = async (event: DragEvent, page: number) => {
 };
 
 const handlePageClick = async (event: MouseEvent, page: number) => {
+  if (!canSign.value) return;
   if (signatureModalOpen.value || fieldModalOpen.value || isFieldDragActive.value) return;
   const type = activePaletteType.value;
   if (!type) return;
@@ -1301,7 +1350,7 @@ const handlePageClick = async (event: MouseEvent, page: number) => {
 };
 
 const startSignatureDrag = (event: DragEvent) => {
-  if (!activeSignature.value) return;
+  if (!canSign.value || !activeSignature.value) return;
   draggingFieldType.value = null;
   draggingSignature.value = activeSignature.value;
   event.dataTransfer?.setData('text/plain', 'signature');
@@ -1335,6 +1384,7 @@ const loadSession = async () => {
 };
 
 const openFieldModal = (field: SigningSessionView['fields'][number]) => {
+  if (!canSign.value) return;
   if (isSignatureField(field)) {
     if (activeSignature.value) {
       placeSignature(field);
@@ -1380,6 +1430,7 @@ const updateFieldValue = (fieldId: string, value: string | null) => {
 };
 
 const saveFieldValue = () => {
+  if (!canSign.value) return;
   const field = activeField.value;
   if (!field) return;
   let nextValue: string | null = fieldDraftValue.value.trim();
@@ -1399,6 +1450,7 @@ const saveFieldValue = () => {
 };
 
 const clearFieldValue = () => {
+  if (!canSign.value) return;
   const field = activeField.value;
   if (!field) return;
   const nextValue = field.type === 'CHECKBOX' ? 'unchecked' : null;
@@ -1949,6 +2001,11 @@ onBeforeUnmount(() => {
   border-bottom: none;
 }
 
+.palette-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .palette-icon {
   width: 16px;
   height: 16px;
@@ -1982,6 +2039,10 @@ onBeforeUnmount(() => {
   border-color: #ef4444;
   color: #ef4444;
   background: rgba(239, 68, 68, 0.08);
+}
+
+.delete-zone.disabled {
+  opacity: 0.6;
 }
 
 .delete-label {
@@ -2216,6 +2277,10 @@ onBeforeUnmount(() => {
   border-color: rgba(100, 116, 139, 0.6);
 }
 
+.field.blocked {
+  cursor: not-allowed;
+}
+
 .field.filled {
   border-style: solid;
   background: rgba(22, 163, 74, 0.08);
@@ -2243,6 +2308,11 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 0.65rem;
   cursor: pointer;
+}
+
+.field-clear:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .signature-render {

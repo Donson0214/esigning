@@ -8,6 +8,16 @@ export type SigningSessionView = {
     name?: string | null;
     email: string;
     status: string;
+    order?: number;
+    canSign?: boolean;
+  };
+  signingOrder?: {
+    currentSigner: {
+      id: string;
+      name?: string | null;
+      email: string;
+      order: number;
+    } | null;
   };
   document: {
     id: string;

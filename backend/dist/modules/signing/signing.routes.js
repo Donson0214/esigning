@@ -5,5 +5,6 @@ const express_1 = require("express");
 const signing_controller_1 = require("./signing.controller");
 const rate_limit_middleware_1 = require("../../middlewares/rate-limit.middleware");
 exports.signingRoutes = (0, express_1.Router)();
+exports.signingRoutes.get('/:token/file', rate_limit_middleware_1.signingRateLimit, signing_controller_1.getSigningFile);
 exports.signingRoutes.get('/:token', rate_limit_middleware_1.signingRateLimit, signing_controller_1.viewSigningSession);
 exports.signingRoutes.post('/:token/submit', rate_limit_middleware_1.signingRateLimit, signing_controller_1.submitSigning);

@@ -12,6 +12,7 @@ import { emitEvent } from '../../realtime/socket';
 import { env } from '../../config/env';
 import { dispatchNotification } from '../notifications/notification.service';
 import { createSignedUrl, downloadStoredFile } from '../../utils/supabase.util';
+import { isSignerInOrder } from '../../utils/signing-order.util';
 import {
   applySignature as applySignatureFlow,
   completeDocument as completeDocumentFlow,
@@ -150,6 +151,31 @@ export async function viewSigningSession(token: string, meta: RequestMeta) {
     }
   }
 
+  const signers = await prisma.signer.findMany({
+    where: { documentId: signer.documentId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      status: true,
+      signOrder: true,
+    },
+    orderBy: { signOrder: 'asc' },
+  });
+  const pendingSigners = signers.filter(
+    (item) => item.status !== SignerStatus.SIGNED && item.status !== SignerStatus.DECLINED,
+  );
+  const currentSigner = pendingSigners[0] ?? null;
+  const isDocActive = ![
+    DocumentStatus.COMPLETED,
+    DocumentStatus.DECLINED,
+    DocumentStatus.EXPIRED,
+  ].includes(signer.document.status);
+  const isSignerActive =
+    signer.status !== SignerStatus.SIGNED && signer.status !== SignerStatus.DECLINED;
+  const isInOrder = signers.length === 0 || isSignerInOrder(signers, signer.id);
+  const canSign = isDocActive && isSignerActive && isInOrder;
+
   const filePath =
     signer.document.signedFileUrl ||
     signer.document.signedFilePublicId ||
@@ -161,6 +187,18 @@ export async function viewSigningSession(token: string, meta: RequestMeta) {
       name: signer.name,
       email: signer.email,
       status: signer.status,
+      order: signer.signOrder,
+      canSign,
+    },
+    signingOrder: {
+      currentSigner: currentSigner
+        ? {
+            id: currentSigner.id,
+            name: currentSigner.name,
+            email: currentSigner.email,
+            order: currentSigner.signOrder,
+          }
+        : null,
     },
     document: {
       id: signer.document.id,

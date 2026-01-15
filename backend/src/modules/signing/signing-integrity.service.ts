@@ -375,6 +375,7 @@ export async function createSigningSession(params: {
   if (signer.status === SignerStatus.DECLINED) {
     throw createHttpError(409, 'SIGNING_DECLINED', 'Signing already declined');
   }
+  await ensureSignerInOrder(signer.documentId, signer.id);
 
   let preHash = signer.document.hash;
   let preHashAlgorithm = signer.document.hashAlgorithm ?? 'SHA-256';
@@ -471,6 +472,7 @@ export async function createSignerField(params: {
 }) {
   const signer = await getSignerAndDocument(params.documentId, params.signerId);
   assertDocumentWritable(signer.document);
+  await ensureSignerInOrder(signer.documentId, signer.id);
   const normalized = normalizeCreateFieldInput(params.input);
 
   const field = await prisma.signatureField.create({
@@ -813,6 +815,7 @@ export async function applySignature(params: {
 }) {
   const signer = await getSignerAndDocument(params.documentId, params.signerId);
   assertDocumentWritable(signer.document);
+  await ensureSignerInOrder(signer.documentId, signer.id);
   if (signer.status === SignerStatus.SIGNED) {
     throw createHttpError(409, 'ALREADY_SIGNED', 'Signing already completed');
   }

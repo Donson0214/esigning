@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.precomputeDocumentHash = precomputeDocumentHash;
 exports.createSigningSession = createSigningSession;
+exports.createSignerField = createSignerField;
 exports.submitManifest = submitManifest;
 exports.uploadSignatureArtifact = uploadSignatureArtifact;
 exports.applySignature = applySignature;
@@ -23,6 +24,91 @@ const signing_order_util_1 = require("../../utils/signing-order.util");
 const events_1 = require("../../shared/events");
 const socket_1 = require("../../realtime/socket");
 const notification_service_1 = require("../notifications/notification.service");
+const toJsonInput = (value) => {
+    if (value === undefined)
+        return undefined;
+    if (value === null)
+        return Prisma.DbNull;
+    return value;
+};
+const fieldTypeValues = new Set(Object.values(client_1.FieldType));
+const coerceFieldType = (value) => {
+    const normalized = String(value ?? '').toUpperCase();
+    if (fieldTypeValues.has(normalized)) {
+        return normalized;
+    }
+    return client_1.FieldType.SIGNATURE;
+};
+const coerceNumber = (value, fallback) => {
+    if (typeof value === 'number' && Number.isFinite(value))
+        return value;
+    if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed))
+            return parsed;
+    }
+    return fallback;
+};
+const getDefaultFieldSize = (type) => {
+    switch (type) {
+        case client_1.FieldType.SIGNATURE:
+            return { width: 160, height: 50 };
+        case client_1.FieldType.INITIAL:
+            return { width: 90, height: 40 };
+        case client_1.FieldType.CHECKBOX:
+            return { width: 22, height: 22 };
+        case client_1.FieldType.DATE:
+            return { width: 90, height: 26 };
+        case client_1.FieldType.IMAGE:
+            return { width: 140, height: 90 };
+        case client_1.FieldType.ATTACHMENT:
+            return { width: 120, height: 32 };
+        default:
+            return { width: 140, height: 32 };
+    }
+};
+const normalizeCreateFieldInput = (input) => {
+    const type = coerceFieldType(input.type);
+    const defaults = getDefaultFieldSize(type);
+    const page = Math.max(1, Math.floor(coerceNumber(input.page, 1)));
+    const width = Math.max(1, coerceNumber(input.width, defaults.width));
+    const height = Math.max(1, coerceNumber(input.height, defaults.height));
+    const x = Math.max(0, coerceNumber(input.x, 0));
+    const y = Math.max(0, coerceNumber(input.y, 0));
+    const required = typeof input.required === 'boolean' ? input.required : true;
+    const label = typeof input.label === 'string' ? input.label : undefined;
+    const placeholder = typeof input.placeholder === 'string' ? input.placeholder : undefined;
+    const value = typeof input.value === 'string' ? input.value : undefined;
+    const options = input.options && typeof input.options === 'object' ? input.options : undefined;
+    return {
+        type,
+        label,
+        placeholder,
+        required,
+        value,
+        options,
+        page,
+        x,
+        y,
+        width,
+        height,
+    };
+};
+const buildFieldSummary = (field) => ({
+    id: field.id,
+    signerId: field.signerId ?? '',
+    type: field.type,
+    label: field.label ?? null,
+    required: field.required ?? true,
+    value: field.value ?? null,
+    status: (field.status ?? client_1.FieldStatus.EMPTY),
+    options: (field.options ?? null),
+    page: field.page,
+    x: field.x,
+    y: field.y,
+    width: field.width,
+    height: field.height,
+});
 const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
 const toNormalizedRect = (options) => {
     if (!options || typeof options !== 'object')
@@ -70,6 +156,78 @@ function assertDocumentWritable(document) {
     if (document.status === client_1.DocumentStatus.DECLINED || document.status === client_1.DocumentStatus.EXPIRED) {
         throw (0, http_error_util_1.createHttpError)(409, 'DOC_LOCKED', 'Document is no longer active');
     }
+}
+async function inviteNextSigner(params) {
+    const nextSigner = await prisma_1.prisma.signer.findFirst({
+        where: {
+            documentId: params.documentId,
+            status: client_1.SignerStatus.PENDING,
+            signingTokenExpiresAt: null,
+        },
+        orderBy: { signOrder: 'asc' },
+    });
+    if (!nextSigner)
+        return null;
+    const token = (0, crypto_util_1.generateToken)();
+    const expiresAt = new Date(Date.now() + env_1.env.signingLinkTtlMinutes * 60 * 1000);
+    const updatedSigner = await prisma_1.prisma.signer.update({
+        where: { id: nextSigner.id },
+        data: {
+            signingTokenHash: (0, crypto_util_1.hashToken)(token),
+            signingTokenExpiresAt: expiresAt,
+        },
+    });
+    const link = `${env_1.env.signingAppUrl}/${token}`;
+    const portalUrl = `${env_1.env.appBaseUrl}/login?redirect=/app/received`;
+    const emailMessage = (0, notification_service_1.buildNotificationEmail)('signer.invited', {
+        recipientName: updatedSigner.name ?? updatedSigner.email,
+        documentTitle: params.documentTitle,
+        senderName: params.ownerName,
+        orgName: params.ownerName,
+        actionUrl: link,
+        portalUrl,
+        expiresAt: expiresAt.toISOString(),
+    });
+    try {
+        await (0, notification_service_1.notifyUserByEmail)({
+            email: updatedSigner.email,
+            forceEmail: true,
+            input: {
+                eventType: 'signer.invited',
+                orgId: params.ownerId,
+                docId: updatedSigner.documentId,
+                actor: { userId: params.ownerId, role: 'SENDER', email: params.ownerEmail ?? undefined },
+                title: 'Document invitation',
+                message: `${params.ownerName} invited you to sign "${params.documentTitle}".`,
+                link,
+                payload: {
+                    documentId: updatedSigner.documentId,
+                    signerId: updatedSigner.id,
+                    signerEmail: updatedSigner.email,
+                    documentTitle: params.documentTitle,
+                },
+                idempotencyKey: `signer-invited:${updatedSigner.id}`,
+                email: {
+                    to: updatedSigner.email,
+                    subject: emailMessage.subject,
+                    text: emailMessage.text,
+                    html: emailMessage.html,
+                },
+            },
+        });
+    }
+    catch (err) {
+        console.warn('Signer notification failed', err);
+    }
+    await (0, socket_1.emitEvent)((0, events_1.createEvent)({
+        event: 'notifications.email.queued',
+        orgId: params.ownerId,
+        docId: updatedSigner.documentId,
+        actor: { userId: params.ownerId, role: 'SENDER' },
+        correlationId: params.meta.correlationId,
+        data: { to: updatedSigner.email, template: 'signing-request', signerId: updatedSigner.id },
+    }), 'org');
+    return updatedSigner;
 }
 async function precomputeDocumentHash(ownerId, documentId, meta) {
     const document = await prisma_1.prisma.document.findFirst({
@@ -144,9 +302,28 @@ async function createSigningSession(params) {
         throw (0, http_error_util_1.createHttpError)(409, 'SIGNING_DECLINED', 'Signing already declined');
     }
     await ensureSignerInOrder(signer.documentId, signer.id);
-    const preHash = signer.document.hash;
+    let preHash = signer.document.hash;
+    let preHashAlgorithm = signer.document.hashAlgorithm ?? 'SHA-256';
+    let preHashComputedAt = signer.document.hashComputedAt ?? new Date();
     if (!preHash) {
-        throw (0, http_error_util_1.createHttpError)(400, 'PREHASH_MISSING', 'Pre-sign hash missing');
+        const source = signer.document.fileUrl || signer.document.filePublicId;
+        if (!source) {
+            throw (0, http_error_util_1.createHttpError)(404, 'FILE_UNAVAILABLE', 'File path missing');
+        }
+        const buffer = await (0, supabase_util_1.downloadStoredFile)(source);
+        const computedAt = new Date();
+        preHash = (0, hash_util_1.hashBuffer)(buffer);
+        preHashAlgorithm = 'SHA-256';
+        preHashComputedAt = computedAt;
+        await prisma_1.prisma.document.update({
+            where: { id: signer.documentId },
+            data: {
+                hash: preHash,
+                hashAlgorithm: preHashAlgorithm,
+                hashComputedAt: preHashComputedAt,
+                version: { increment: 1 },
+            },
+        });
     }
     const sessionExpiresAt = new Date(Date.now() + env_1.env.signingSessionTtlMinutes * 60 * 1000);
     await prisma_1.prisma.signingSession.updateMany({
@@ -164,8 +341,8 @@ async function createSigningSession(params) {
             status: client_1.SigningSessionStatus.ACTIVE,
             fieldVersion: signer.document.fieldVersion,
             preHash,
-            preHashAlgorithm: signer.document.hashAlgorithm ?? 'SHA-256',
-            preHashComputedAt: signer.document.hashComputedAt ?? new Date(),
+            preHashAlgorithm,
+            preHashComputedAt,
             expiresAt: sessionExpiresAt,
             correlationId: params.meta.correlationId,
             clientMutationId: params.meta.clientMutationId,
@@ -192,6 +369,59 @@ async function createSigningSession(params) {
     }));
     return { signingSessionId: session.id, expiresAt: sessionExpiresAt.toISOString() };
 }
+async function createSignerField(params) {
+    const signer = await getSignerAndDocument(params.documentId, params.signerId);
+    assertDocumentWritable(signer.document);
+    await ensureSignerInOrder(signer.documentId, signer.id);
+    const normalized = normalizeCreateFieldInput(params.input);
+    const field = await prisma_1.prisma.signatureField.create({
+        data: {
+            documentId: signer.documentId,
+            signerId: signer.id,
+            signerEmail: signer.email,
+            type: normalized.type,
+            label: normalized.label ?? null,
+            placeholder: normalized.placeholder ?? null,
+            required: normalized.required,
+            value: normalized.value ?? null,
+            status: normalized.value ? client_1.FieldStatus.FILLED : client_1.FieldStatus.EMPTY,
+            options: toJsonInput(normalized.options ?? null),
+            page: normalized.page,
+            x: normalized.x,
+            y: normalized.y,
+            width: normalized.width,
+            height: normalized.height,
+        },
+    });
+    const auditEvent = await prisma_1.prisma.auditEvent.create({
+        data: {
+            documentId: signer.documentId,
+            actorType: client_1.AuditActorType.SIGNER,
+            actorSignerId: signer.id,
+            eventType: client_1.AuditEventType.FIELD_UPDATED,
+            ipAddress: params.meta.ipAddress,
+            userAgent: params.meta.userAgent,
+            metadata: { action: 'created', fieldId: field.id },
+        },
+    });
+    await (0, socket_1.emitEvent)((0, events_1.createEvent)({
+        event: 'doc.field.updated',
+        orgId: signer.document.ownerId,
+        docId: signer.documentId,
+        actor: { userId: signer.id, role: 'SIGNER', email: signer.email },
+        correlationId: params.meta.correlationId,
+        data: { fields: [buildFieldSummary(field)] },
+    }));
+    await (0, socket_1.emitEvent)((0, events_1.createEvent)({
+        event: 'doc.audit.appended',
+        orgId: signer.document.ownerId,
+        docId: signer.documentId,
+        actor: { userId: signer.id, role: 'SIGNER', email: signer.email },
+        correlationId: params.meta.correlationId,
+        data: { auditEventId: auditEvent.id, eventType: auditEvent.eventType },
+    }));
+    return field;
+}
 async function submitManifest(params) {
     const signer = await getSignerAndDocument(params.documentId, params.signerId);
     assertDocumentWritable(signer.document);
@@ -214,21 +444,14 @@ async function submitManifest(params) {
         where: { documentId: signer.documentId, signerId: signer.id },
     });
     const fieldMap = new Map(fields.map((field) => [field.id, field]));
-    if (fields.length === 0) {
-        throw (0, http_error_util_1.createHttpError)(400, 'NO_FIELDS', 'No signature fields assigned');
-    }
-    const inputIds = new Set(params.fields.map((field) => field.fieldId));
-    for (const field of fields) {
-        if (!inputIds.has(field.id)) {
-            throw (0, http_error_util_1.createHttpError)(400, 'MISSING_FIELD_VALUE', 'All fields must be completed');
-        }
-    }
-    const manifestFields = params.fields
+    const manifestInputs = params.fields.length
+        ? params.fields
+        : fields.map((field) => ({ fieldId: field.id, value: field.value ?? '' }));
+    const manifestFields = manifestInputs
         .map((input) => {
         const field = fieldMap.get(input.fieldId);
-        if (!field) {
-            throw (0, http_error_util_1.createHttpError)(400, 'INVALID_FIELD', 'Signature field is invalid');
-        }
+        if (!field)
+            return null;
         return {
             fieldId: field.id,
             type: field.type,
@@ -237,10 +460,11 @@ async function submitManifest(params) {
             y: field.y,
             width: field.width,
             height: field.height,
-            value: input.value,
+            value: input.value ?? '',
             normalized: toNormalizedRect(field.options),
         };
     })
+        .filter((field) => Boolean(field))
         .sort((a, b) => a.fieldId.localeCompare(b.fieldId));
     const manifest = {
         docId: signer.documentId,
@@ -348,31 +572,41 @@ async function uploadSignatureArtifact(params) {
     }
     let artifactHash;
     let artifactUrl;
+    let artifactType = params.type;
     if (params.type === client_1.SignatureArtifactType.TYPED) {
-        artifactHash = (0, hash_util_1.hashString)(params.data);
+        const fallback = params.data?.trim() || signer.name || signer.email || 'Signed';
+        artifactHash = (0, hash_util_1.hashString)(fallback);
     }
     else {
-        const parsed = (0, signature_util_1.parseDataUrl)(params.data);
+        const parsed = (0, signature_util_1.parseDataUrl)(params.data ?? '');
         if (!parsed) {
-            throw (0, http_error_util_1.createHttpError)(400, 'INVALID_SIGNATURE', 'Signature data must be a base64 data URL');
+            const fallback = params.data?.trim() || signer.name || signer.email || 'Signed';
+            artifactHash = (0, hash_util_1.hashString)(fallback);
+            artifactType = client_1.SignatureArtifactType.TYPED;
         }
-        const mimeType = parsed.mimeType.toLowerCase();
-        if (!['image/png', 'image/jpeg', 'image/jpg'].includes(mimeType)) {
-            throw (0, http_error_util_1.createHttpError)(400, 'INVALID_SIGNATURE', 'Unsupported signature image type');
+        else {
+            const mimeType = parsed.mimeType.toLowerCase();
+            if (!['image/png', 'image/jpeg', 'image/jpg'].includes(mimeType)) {
+                const fallback = params.data?.trim() || signer.name || signer.email || 'Signed';
+                artifactHash = (0, hash_util_1.hashString)(fallback);
+                artifactType = client_1.SignatureArtifactType.TYPED;
+            }
+            else {
+                artifactHash = (0, hash_util_1.hashBuffer)(parsed.buffer);
+                const extension = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? '.jpg' : '.png';
+                const upload = await (0, supabase_util_1.uploadBufferToSupabase)(parsed.buffer, {
+                    folder: 'signatures',
+                    fileName: `${signer.documentId}-${signer.id}-signature${extension}`,
+                    contentType: mimeType,
+                });
+                artifactUrl = upload.path;
+            }
         }
-        artifactHash = (0, hash_util_1.hashBuffer)(parsed.buffer);
-        const extension = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? '.jpg' : '.png';
-        const upload = await (0, supabase_util_1.uploadBufferToSupabase)(parsed.buffer, {
-            folder: 'signatures',
-            fileName: `${signer.documentId}-${signer.id}-signature${extension}`,
-            contentType: mimeType,
-        });
-        artifactUrl = upload.path;
     }
     const updated = await prisma_1.prisma.signingSession.update({
         where: { id: session.id },
         data: {
-            signatureArtifactType: params.type,
+            signatureArtifactType: artifactType,
             signatureArtifactHash: artifactHash,
             signatureArtifactAlgorithm: 'SHA-256',
             signatureArtifactUrl: artifactUrl ?? null,
@@ -463,11 +697,20 @@ async function applySignature(params) {
         const mimeType = isJpeg ? 'image/jpeg' : isPng ? 'image/png' : 'image/png';
         signatureImageParsed = { mimeType, buffer: imageBuffer };
     }
-    const signedBuffer = await (0, pdf_signature_util_1.applySignatureToPdf)({
-        pdfBuffer,
-        fields: fieldsToApply,
-        signatureImage: signatureImageParsed,
-    });
+    let signedBuffer;
+    try {
+        signedBuffer = await (0, pdf_signature_util_1.applySignatureToPdf)({
+            pdfBuffer,
+            fields: fieldsToApply,
+            signatureImage: signatureImageParsed,
+        });
+    }
+    catch (err) {
+        if (err && typeof err === 'object' && 'status' in err) {
+            throw err;
+        }
+        throw (0, http_error_util_1.createHttpError)(400, 'PDF_RENDER_FAILED', err instanceof Error ? err.message : 'Unable to apply signature');
+    }
     const postHash = (0, hash_util_1.hashBuffer)(signedBuffer);
     const postComputedAt = new Date();
     const upload = await (0, supabase_util_1.uploadBufferToSupabase)(signedBuffer, {
@@ -701,6 +944,16 @@ async function applySignature(params) {
     }
     catch (err) {
         console.warn('Signer notification failed', err);
+    }
+    if (result.remaining > 0) {
+        await inviteNextSigner({
+            documentId: signer.documentId,
+            ownerId: signer.document.ownerId,
+            ownerName,
+            ownerEmail: owner?.email ?? null,
+            documentTitle: signer.document.title,
+            meta: params.meta,
+        });
     }
     return { postHash, documentVersion: result.updated.version, status: result.updated.status };
 }

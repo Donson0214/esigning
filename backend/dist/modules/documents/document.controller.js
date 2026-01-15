@@ -35,6 +35,9 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createDocument = createDocument;
 exports.listDocuments = listDocuments;
+exports.listReceivedDocuments = listReceivedDocuments;
+exports.listReceivedSummary = listReceivedSummary;
+exports.createSigningToken = createSigningToken;
 exports.getDocument = getDocument;
 exports.getDocumentPreviewUrl = getDocumentPreviewUrl;
 exports.getDocumentFile = getDocumentFile;
@@ -79,6 +82,40 @@ async function listDocuments(req, res, next) {
     try {
         const documents = await documentService.listDocuments(req.user.id);
         res.json({ documents });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function listReceivedDocuments(req, res, next) {
+    try {
+        const documents = await documentService.listReceivedDocuments(req.user.id);
+        res.json({ documents });
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function listReceivedSummary(req, res, next) {
+    try {
+        const summary = await documentService.getReceivedSummary(req.user.id);
+        res.json(summary);
+    }
+    catch (err) {
+        next(err);
+    }
+}
+async function createSigningToken(req, res, next) {
+    try {
+        const documentId = getParam(req.params.id);
+        if (!documentId) {
+            return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+        }
+        const result = await documentService.createSigningTokenForUser({
+            userId: req.user.id,
+            documentId,
+        });
+        res.json(result);
     }
     catch (err) {
         next(err);

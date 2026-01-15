@@ -2,6 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createDocument = createDocument;
 exports.listDocuments = listDocuments;
+exports.getReceivedSummary = getReceivedSummary;
+exports.listReceivedDocuments = listReceivedDocuments;
+exports.createSigningTokenForUser = createSigningTokenForUser;
 exports.getDocument = getDocument;
 exports.sendDocument = sendDocument;
 exports.getDocumentStats = getDocumentStats;
@@ -15,6 +18,7 @@ const supabase_util_1 = require("../../utils/supabase.util");
 const hash_util_1 = require("../../utils/hash.util");
 const http_error_util_1 = require("../../utils/http-error.util");
 const crypto_util_1 = require("../../utils/crypto.util");
+const signing_order_util_1 = require("../../utils/signing-order.util");
 const events_1 = require("../../shared/events");
 const socket_1 = require("../../realtime/socket");
 const notification_service_1 = require("../notifications/notification.service");
@@ -62,6 +66,14 @@ async function ensureDocumentWritable(ownerId, documentId) {
     }
     return document;
 }
+function assertDocumentWritable(document) {
+    if (document.lockedAt || document.status === client_1.DocumentStatus.COMPLETED) {
+        throw (0, http_error_util_1.createHttpError)(409, 'DOC_LOCKED', 'Document is locked');
+    }
+    if (document.status === client_1.DocumentStatus.DECLINED || document.status === client_1.DocumentStatus.EXPIRED) {
+        throw (0, http_error_util_1.createHttpError)(409, 'DOC_LOCKED', 'Document is no longer active');
+    }
+}
 async function resolveSigner(params) {
     if (!params.signerEmail && params.signerIndex === undefined)
         return null;
@@ -78,6 +90,16 @@ async function resolveSigner(params) {
         return signers[params.signerIndex] ?? null;
     }
     return null;
+}
+async function getUserEmail(userId) {
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true },
+    });
+    if (!user?.email) {
+        throw (0, http_error_util_1.createHttpError)(404, 'USER_NOT_FOUND', 'User not found');
+    }
+    return { email: user.email.toLowerCase(), name: user.name ?? user.email };
 }
 async function createDocument(params) {
     const { ownerId, title, file, meta } = params;
@@ -196,6 +218,122 @@ async function listDocuments(ownerId) {
     });
     return Promise.all(documents.map((document) => withAccessUrls(document)));
 }
+async function getReceivedSummary(userId) {
+    const { email } = await getUserEmail(userId);
+    const baseWhere = {
+        email,
+        document: {
+            ownerId: { not: userId },
+            status: {
+                notIn: [client_1.DocumentStatus.COMPLETED, client_1.DocumentStatus.DECLINED, client_1.DocumentStatus.EXPIRED],
+            },
+        },
+    };
+    const pendingCount = await prisma_1.prisma.signer.count({
+        where: {
+            ...baseWhere,
+            status: { in: [client_1.SignerStatus.PENDING, client_1.SignerStatus.VIEWED] },
+        },
+    });
+    const total = await prisma_1.prisma.signer.count({ where: baseWhere });
+    return { pendingCount, total };
+}
+async function listReceivedDocuments(userId) {
+    const { email } = await getUserEmail(userId);
+    const signers = await prisma_1.prisma.signer.findMany({
+        where: {
+            email,
+            document: {
+                ownerId: { not: userId },
+            },
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+            document: {
+                select: {
+                    id: true,
+                    title: true,
+                    status: true,
+                    sentAt: true,
+                    createdAt: true,
+                    owner: { select: { email: true, name: true } },
+                    signers: { select: { id: true, status: true, signOrder: true } },
+                },
+            },
+        },
+    });
+    return signers.map((signer) => {
+        const doc = signer.document;
+        const isDocActive = doc.status !== client_1.DocumentStatus.COMPLETED &&
+            doc.status !== client_1.DocumentStatus.DECLINED &&
+            doc.status !== client_1.DocumentStatus.EXPIRED;
+        const isSignerActive = signer.status !== client_1.SignerStatus.SIGNED && signer.status !== client_1.SignerStatus.DECLINED;
+        const orderedSigners = Array.isArray(doc.signers) ? doc.signers : [];
+        const canSign = isDocActive &&
+            isSignerActive &&
+            (orderedSigners.length === 0 || (0, signing_order_util_1.isSignerInOrder)(orderedSigners, signer.id));
+        return {
+            documentId: doc.id,
+            title: doc.title,
+            status: doc.status,
+            sentAt: doc.sentAt?.toISOString() ?? doc.createdAt.toISOString(),
+            signerStatus: signer.status,
+            signerId: signer.id,
+            signerEmail: signer.email,
+            signingExpiresAt: signer.signingTokenExpiresAt?.toISOString() ?? null,
+            sender: {
+                email: doc.owner.email,
+                name: doc.owner.name ?? doc.owner.email,
+            },
+            canSign,
+        };
+    });
+}
+async function createSigningTokenForUser(params) {
+    const { email } = await getUserEmail(params.userId);
+    const signer = await prisma_1.prisma.signer.findFirst({
+        where: {
+            documentId: params.documentId,
+            email,
+        },
+        include: {
+            document: {
+                select: {
+                    status: true,
+                    lockedAt: true,
+                    signers: { select: { id: true, status: true, signOrder: true } },
+                },
+            },
+        },
+    });
+    if (!signer) {
+        throw (0, http_error_util_1.createHttpError)(404, 'SIGNER_NOT_FOUND', 'Signer not found');
+    }
+    if (!signer.document) {
+        throw (0, http_error_util_1.createHttpError)(404, 'DOCUMENT_NOT_FOUND', 'Document not found');
+    }
+    assertDocumentWritable(signer.document);
+    if (signer.status === client_1.SignerStatus.SIGNED || signer.status === client_1.SignerStatus.DECLINED) {
+        throw (0, http_error_util_1.createHttpError)(409, 'SIGNER_INACTIVE', 'Signing is already completed');
+    }
+    const orderedSigners = Array.isArray(signer.document.signers) ? signer.document.signers : [];
+    if (orderedSigners.length === 0) {
+        throw (0, http_error_util_1.createHttpError)(409, 'SIGNER_ORDER_UNAVAILABLE', 'Signer order is unavailable');
+    }
+    if (!(0, signing_order_util_1.isSignerInOrder)(orderedSigners, signer.id)) {
+        throw (0, http_error_util_1.createHttpError)(409, 'OUT_OF_ORDER', 'Signer is out of order');
+    }
+    const token = (0, crypto_util_1.generateToken)();
+    const expiresAt = new Date(Date.now() + env_1.env.signingLinkTtlMinutes * 60 * 1000);
+    await prisma_1.prisma.signer.update({
+        where: { id: signer.id },
+        data: {
+            signingTokenHash: (0, crypto_util_1.hashToken)(token),
+            signingTokenExpiresAt: expiresAt,
+        },
+    });
+    return { signingToken: token, expiresAt: expiresAt.toISOString() };
+}
 async function getDocument(ownerId, documentId) {
     const document = await prisma_1.prisma.document.findFirst({
         where: { id: documentId, ownerId },
@@ -239,24 +377,35 @@ async function sendDocument(params) {
     if (uniqueEmails.size !== signerEmails.length) {
         throw (0, http_error_util_1.createHttpError)(400, 'DUPLICATE_SIGNERS', 'Signer emails must be unique');
     }
+    const inviteStrategy = payload.inviteStrategy ?? 'immediate';
+    const signerOrders = payload.signers.map((signer, index) => signer.order ?? index + 1);
+    const firstOrder = signerOrders.length ? Math.min(...signerOrders) : 1;
+    const ownerEmail = owner?.email?.trim().toLowerCase();
     const expiresAt = new Date(Date.now() + env_1.env.signingLinkTtlMinutes * 60 * 1000);
     const signerTokens = {};
     const result = await prisma_1.prisma.$transaction(async (tx) => {
         const createdSigners = [];
+        const invitedEmails = [];
         for (const [index, signer] of payload.signers.entries()) {
+            const order = signer.order ?? index + 1;
             const token = (0, crypto_util_1.generateToken)();
-            signerTokens[signer.email.toLowerCase()] = token;
+            const normalizedEmail = signer.email.toLowerCase();
+            signerTokens[normalizedEmail] = token;
+            const shouldInviteNow = inviteStrategy === 'immediate' || order === firstOrder;
             const created = await tx.signer.create({
                 data: {
                     documentId: document.id,
                     name: signer.name ?? null,
-                    email: signer.email.toLowerCase(),
+                    email: normalizedEmail,
                     status: client_1.SignerStatus.PENDING,
-                    signOrder: signer.order ?? index + 1,
+                    signOrder: order,
                     signingTokenHash: (0, crypto_util_1.hashToken)(token),
-                    signingTokenExpiresAt: expiresAt,
+                    signingTokenExpiresAt: shouldInviteNow ? expiresAt : null,
                 },
             });
+            if (shouldInviteNow) {
+                invitedEmails.push(created.email);
+            }
             createdSigners.push(created);
         }
         const signersByEmail = new Map(createdSigners.map((s) => [s.email, s]));
@@ -266,9 +415,6 @@ async function sendDocument(params) {
             const existingFields = await tx.signatureField.findMany({
                 where: { documentId: document.id },
             });
-            if (existingFields.length === 0) {
-                throw (0, http_error_util_1.createHttpError)(400, 'FIELDS_REQUIRED', 'At least one field is required');
-            }
             createdFields = existingFields;
             for (const field of existingFields) {
                 if (field.signerId)
@@ -340,20 +486,29 @@ async function sendDocument(params) {
                 userAgent: meta.userAgent,
             },
         });
-        return { updated, createdSigners, createdFields, auditEvent };
+        return { updated, createdSigners, createdFields, auditEvent, invitedEmails };
     });
+    const invitedEmailSet = new Set(result.invitedEmails);
     for (const signer of result.createdSigners) {
+        if (!invitedEmailSet.has(signer.email)) {
+            continue;
+        }
+        if (ownerEmail && signer.email === ownerEmail && inviteStrategy === 'sequential') {
+            continue;
+        }
         const token = signerTokens[signer.email];
         if (!token) {
             throw (0, http_error_util_1.createHttpError)(500, 'SIGNING_TOKEN_MISSING', 'Signing token missing');
         }
         const link = `${env_1.env.signingAppUrl}/${token}`;
+        const portalUrl = `${env_1.env.appBaseUrl}/login?redirect=/app/received`;
         const emailMessage = (0, notification_service_1.buildNotificationEmail)('signer.invited', {
             recipientName: signer.name ?? signer.email,
             documentTitle: document.title,
             senderName: ownerName,
             orgName: ownerName,
             actionUrl: link,
+            portalUrl,
             expiresAt: expiresAt.toISOString(),
         });
         try {
@@ -473,7 +628,9 @@ async function sendDocument(params) {
     catch (err) {
         console.warn('Notification dispatch failed', err);
     }
-    return withAccessUrls(result.updated);
+    const signingToken = ownerEmail ? signerTokens[ownerEmail] : undefined;
+    const response = await withAccessUrls(result.updated);
+    return { ...response, signingToken, inviteStrategy };
 }
 async function getDocumentStats(ownerId) {
     const grouped = await prisma_1.prisma.document.groupBy({

@@ -20,3 +20,4 @@ exports.routes.use('/documents', document_routes_1.documentRoutes);
 exports.routes.use('/notifications', notification_routes_1.notificationRoutes);
 exports.routes.use('/docs', signing_integrity_routes_1.signingIntegrityRoutes);
 exports.routes.use('/sign', signing_routes_1.signingRoutes);
+exports.routes.use('/signing', signing_routes_1.signingRoutes);

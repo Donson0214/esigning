@@ -34,12 +34,14 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.viewSigningSession = viewSigningSession;
+exports.getSigningFile = getSigningFile;
 exports.submitSigning = submitSigning;
 const signing_types_1 = require("./signing.types");
 const signingService = __importStar(require("./signing.service"));
 function getParam(value) {
     return Array.isArray(value) ? value[0] : value;
 }
+const sanitizeFileName = (value) => value.replace(/["\\\r\n]/g, '_');
 async function viewSigningSession(req, res, next) {
     try {
         const token = getParam(req.params.token);
@@ -57,9 +59,26 @@ async function viewSigningSession(req, res, next) {
         next(err);
     }
 }
+async function getSigningFile(req, res, next) {
+    try {
+        const token = getParam(req.params.token);
+        if (!token) {
+            return res.status(400).json({ error: 'TOKEN_REQUIRED' });
+        }
+        const file = await signingService.getSigningFile(token);
+        res.setHeader('Content-Type', file.contentType);
+        res.setHeader('Content-Disposition', `inline; filename="${sanitizeFileName(file.fileName)}"`);
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.setHeader('Content-Length', file.buffer.length.toString());
+        res.send(file.buffer);
+    }
+    catch (err) {
+        next(err);
+    }
+}
 async function submitSigning(req, res, next) {
     try {
-        const payload = signing_types_1.submitSignatureSchema.parse(req.body);
+        const payload = signing_types_1.submitSignatureSchema.parse(req.body ?? {});
         const token = getParam(req.params.token);
         if (!token) {
             return res.status(400).json({ error: 'TOKEN_REQUIRED' });

@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.precomputeHash = precomputeHash;
 exports.createSigningSession = createSigningSession;
+exports.createSignerField = createSignerField;
 exports.submitManifest = submitManifest;
 exports.uploadSignature = uploadSignature;
 exports.applySignature = applySignature;
@@ -117,9 +118,39 @@ async function createSigningSession(req, res, next) {
         next(err);
     }
 }
+async function createSignerField(req, res, next) {
+    try {
+        const input = signing_types_1.createSignerFieldSchema.parse(req.body ?? {});
+        const documentId = getParam(req.params.docId);
+        if (!documentId) {
+            return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+        }
+        if (!req.signer) {
+            return res.status(401).json({ error: 'SIGNER_REQUIRED' });
+        }
+        const result = await signingIntegrityService.createSignerField({
+            documentId,
+            signerId: req.signer.id,
+            input,
+            meta: {
+                ipAddress: req.ip,
+                userAgent: req.get('user-agent') ?? undefined,
+                correlationId: req.correlationId,
+            },
+        });
+        res.status(201).json(result);
+    }
+    catch (err) {
+        const docId = getParam(req.params.docId);
+        if (docId && err instanceof Error) {
+            void emitSignatureRejected(req, docId, err.code ?? 'VALIDATION_FAILED', err.message);
+        }
+        next(err);
+    }
+}
 async function submitManifest(req, res, next) {
     try {
-        const input = signing_types_1.submitManifestSchema.parse(req.body);
+        const input = signing_types_1.submitManifestSchema.parse(req.body ?? {});
         const documentId = getParam(req.params.docId);
         if (!documentId) {
             return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
@@ -150,7 +181,7 @@ async function submitManifest(req, res, next) {
 }
 async function uploadSignature(req, res, next) {
     try {
-        const input = signing_types_1.uploadSignatureSchema.parse(req.body);
+        const input = signing_types_1.uploadSignatureSchema.parse(req.body ?? {});
         const documentId = getParam(req.params.docId);
         if (!documentId) {
             return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
@@ -182,7 +213,7 @@ async function uploadSignature(req, res, next) {
 }
 async function applySignature(req, res, next) {
     try {
-        const input = signing_types_1.applySignatureSchema.parse(req.body);
+        const input = signing_types_1.applySignatureSchema.parse(req.body ?? {});
         const documentId = getParam(req.params.docId);
         if (!documentId) {
             return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });

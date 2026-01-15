@@ -47,6 +47,7 @@ const fieldSchema = zod_1.z
 exports.sendDocumentSchema = zod_1.z.object({
     signers: zod_1.z.array(signerSchema).min(1),
     fields: zod_1.z.array(fieldSchema).min(1).optional(),
+    inviteStrategy: zod_1.z.enum(['immediate', 'sequential']).optional(),
 });
 exports.createFieldSchema = fieldSchema;
 exports.updateFieldSchema = zod_1.z.object({

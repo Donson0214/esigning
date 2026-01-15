@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.viewSigningSession = viewSigningSession;
+exports.getSigningFile = getSigningFile;
 exports.submitSigning = submitSigning;
 const client_1 = require("@prisma/client");
 const prisma_1 = require("../../config/prisma");
@@ -11,6 +12,7 @@ const socket_1 = require("../../realtime/socket");
 const env_1 = require("../../config/env");
 const notification_service_1 = require("../notifications/notification.service");
 const supabase_util_1 = require("../../utils/supabase.util");
+const signing_order_util_1 = require("../../utils/signing-order.util");
 const signing_integrity_service_1 = require("./signing-integrity.service");
 async function getSignerByToken(token) {
     const signer = await prisma_1.prisma.signer.findFirst({
@@ -121,20 +123,73 @@ async function viewSigningSession(token, meta) {
             console.warn('Notification dispatch failed', err);
         }
     }
+    const signers = await prisma_1.prisma.signer.findMany({
+        where: { documentId: signer.documentId },
+        select: {
+            id: true,
+            email: true,
+            name: true,
+            status: true,
+            signOrder: true,
+        },
+        orderBy: { signOrder: 'asc' },
+    });
+    const pendingSigners = signers.filter((item) => item.status !== client_1.SignerStatus.SIGNED && item.status !== client_1.SignerStatus.DECLINED);
+    const currentSigner = pendingSigners[0] ?? null;
+    const isDocActive = ![
+        client_1.DocumentStatus.COMPLETED,
+        client_1.DocumentStatus.DECLINED,
+        client_1.DocumentStatus.EXPIRED,
+    ].includes(signer.document.status);
+    const isSignerActive = signer.status !== client_1.SignerStatus.SIGNED && signer.status !== client_1.SignerStatus.DECLINED;
+    const isInOrder = signers.length === 0 || (0, signing_order_util_1.isSignerInOrder)(signers, signer.id);
+    const canSign = isDocActive && isSignerActive && isInOrder;
+    const filePath = signer.document.signedFileUrl ||
+        signer.document.signedFilePublicId ||
+        signer.document.fileUrl ||
+        signer.document.filePublicId;
     return {
         signer: {
             id: signer.id,
             name: signer.name,
             email: signer.email,
             status: signer.status,
+            order: signer.signOrder,
+            canSign,
+        },
+        signingOrder: {
+            currentSigner: currentSigner
+                ? {
+                    id: currentSigner.id,
+                    name: currentSigner.name,
+                    email: currentSigner.email,
+                    order: currentSigner.signOrder,
+                }
+                : null,
         },
         document: {
             id: signer.document.id,
             title: signer.document.title,
-            fileUrl: await (0, supabase_util_1.createSignedUrl)(signer.document.fileUrl).catch(() => signer.document.fileUrl),
+            fileUrl: filePath ? await (0, supabase_util_1.createSignedUrl)(filePath).catch(() => filePath) : '',
             status: signer.document.status,
         },
         fields: signer.fields,
+    };
+}
+async function getSigningFile(token) {
+    const signer = await getSignerByToken(token);
+    const filePath = signer.document.signedFileUrl ||
+        signer.document.signedFilePublicId ||
+        signer.document.fileUrl ||
+        signer.document.filePublicId;
+    if (!filePath) {
+        throw (0, http_error_util_1.createHttpError)(404, 'FILE_UNAVAILABLE', 'File path missing');
+    }
+    const buffer = await (0, supabase_util_1.downloadStoredFile)(filePath);
+    return {
+        buffer,
+        fileName: signer.document.fileName || 'document.pdf',
+        contentType: signer.document.fileMimeType || 'application/pdf',
     };
 }
 async function submitSigning(token, payload, meta) {

@@ -1,10 +1,12 @@
 export function createId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
+  const cryptoObj: Crypto | undefined =
+    typeof globalThis.crypto !== 'undefined' ? globalThis.crypto : undefined;
+  if (cryptoObj?.randomUUID) {
+    return cryptoObj.randomUUID();
   }
   const bytes = new Uint8Array(16);
-  if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
-    crypto.getRandomValues(bytes);
+  if (cryptoObj?.getRandomValues) {
+    cryptoObj.getRandomValues(bytes);
   } else {
     for (let i = 0; i < bytes.length; i += 1) {
       bytes[i] = Math.floor(Math.random() * 256);

@@ -9,6 +9,7 @@ const signing_integrity_controller_1 = require("./signing-integrity.controller")
 exports.signingIntegrityRoutes = (0, express_1.Router)();
 exports.signingIntegrityRoutes.post('/:docId/hash/precompute', auth_middleware_1.requireAuth, signing_integrity_controller_1.precomputeHash);
 exports.signingIntegrityRoutes.post('/:docId/signing-sessions', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.createSigningSession);
+exports.signingIntegrityRoutes.post('/:docId/fields', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.createSignerField);
 exports.signingIntegrityRoutes.post('/:docId/manifest', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.submitManifest);
 exports.signingIntegrityRoutes.post('/:docId/signature', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.uploadSignature);
 exports.signingIntegrityRoutes.post('/:docId/apply-signature', rate_limit_middleware_1.signingRateLimit, signing_auth_middleware_1.requireSigningToken, signing_integrity_controller_1.applySignature);
