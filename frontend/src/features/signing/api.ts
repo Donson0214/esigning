@@ -41,11 +41,12 @@ export async function createSigningSession(
   clientMutationId?: string,
   correlationId?: string,
 ) {
+  const payload = clientMutationId ? { clientMutationId } : undefined;
   const result = await requestWithCorrelation<{ signingSessionId: string; expiresAt: string }>({
     method: 'POST',
     url: `/docs/${docId}/signing-sessions`,
     headers: { 'x-signing-token': signingToken },
-    data: { clientMutationId },
+    data: payload,
   }, correlationId);
   return result;
 }

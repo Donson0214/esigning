@@ -4,65 +4,54 @@ export const submitSignatureSchema = z.object({
   signatures: z
     .array(
       z.object({
-        fieldId: z.string().uuid(),
-        value: z.string().min(1),
+        fieldId: z.string(),
+        value: z.string().optional().default(''),
       }),
     )
-    .min(1),
+    .optional()
+    .default([]),
 });
 
 export const createSigningSessionSchema = z.object({
-  clientMutationId: z.string().uuid().optional(),
+  clientMutationId: z.string().optional(),
 });
 
 export const submitManifestSchema = z.object({
-  signingSessionId: z.string().uuid(),
+  signingSessionId: z.string().optional().default(''),
   fields: z
     .array(
       z.object({
-        fieldId: z.string().uuid(),
-        value: z.string(),
+        fieldId: z.string(),
+        value: z.string().optional().default(''),
       }),
-    ),
+    )
+    .optional()
+    .default([]),
 });
 
 export const uploadSignatureSchema = z.object({
-  signingSessionId: z.string().uuid(),
-  type: z.enum(['DRAWN', 'TYPED', 'UPLOADED']),
+  signingSessionId: z.string().optional().default(''),
+  type: z.enum(['DRAWN', 'TYPED', 'UPLOADED']).optional().default('TYPED'),
   data: z.string().optional().default(''),
 });
 
 export const applySignatureSchema = z.object({
-  signingSessionId: z.string().uuid(),
+  signingSessionId: z.string().optional().default(''),
 });
 
 export const createSignerFieldSchema = z.object({
-  type: z.enum([
-    'SIGNATURE',
-    'DATE',
-    'INITIAL',
-    'FULL_NAME',
-    'EMAIL',
-    'TEXT',
-    'CHECKBOX',
-    'DROPDOWN',
-    'RADIO',
-    'COMPANY',
-    'JOB_TITLE',
-    'IMAGE',
-    'ATTACHMENT',
-  ]),
-  label: z.string().min(1).optional(),
-  placeholder: z.string().min(1).optional(),
+  type: z.string().optional(),
+  label: z.string().optional(),
+  placeholder: z.string().optional(),
   required: z.boolean().optional(),
   value: z.string().optional(),
-  options: z.record(z.string(), z.any()).optional(),
-  page: z.number().int().min(1),
-  x: z.number().min(0),
-  y: z.number().min(0),
-  width: z.number().min(1),
-  height: z.number().min(1),
-});
+  options: z.any().optional(),
+  page: z.any().optional(),
+  x: z.any().optional(),
+  y: z.any().optional(),
+  width: z.any().optional(),
+  height: z.any().optional(),
+}).passthrough();
 
 export type SubmitSignatureInput = z.infer<typeof submitSignatureSchema>;
 export type CreateSigningSessionInput = z.infer<typeof createSigningSessionSchema>;

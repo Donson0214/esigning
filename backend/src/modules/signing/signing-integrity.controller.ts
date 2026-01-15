@@ -102,7 +102,7 @@ export async function createSigningSession(req: Request, res: Response, next: Ne
 
 export async function createSignerField(req: Request, res: Response, next: NextFunction) {
   try {
-    const input = createSignerFieldSchema.parse(req.body);
+    const input = createSignerFieldSchema.parse(req.body ?? {});
     const documentId = getParam(req.params.docId);
     if (!documentId) {
       return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
@@ -137,7 +137,7 @@ export async function createSignerField(req: Request, res: Response, next: NextF
 
 export async function submitManifest(req: Request, res: Response, next: NextFunction) {
   try {
-    const input = submitManifestSchema.parse(req.body);
+    const input = submitManifestSchema.parse(req.body ?? {});
     const documentId = getParam(req.params.docId);
     if (!documentId) {
       return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
@@ -173,7 +173,7 @@ export async function submitManifest(req: Request, res: Response, next: NextFunc
 
 export async function uploadSignature(req: Request, res: Response, next: NextFunction) {
   try {
-    const input = uploadSignatureSchema.parse(req.body);
+    const input = uploadSignatureSchema.parse(req.body ?? {});
     const documentId = getParam(req.params.docId);
     if (!documentId) {
       return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
@@ -210,7 +210,7 @@ export async function uploadSignature(req: Request, res: Response, next: NextFun
 
 export async function applySignature(req: Request, res: Response, next: NextFunction) {
   try {
-    const input = applySignatureSchema.parse(req.body);
+    const input = applySignatureSchema.parse(req.body ?? {});
     const documentId = getParam(req.params.docId);
     if (!documentId) {
       return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });

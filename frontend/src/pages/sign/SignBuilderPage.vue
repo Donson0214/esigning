@@ -237,10 +237,10 @@
             v-if="signingIntent === 'send'"
             class="btn btn-outline"
             type="button"
-            @click="signNowAndSend"
+            @click="sendForSigning"
             :disabled="!canSend || savingDraft || signingNow"
           >
-            {{ signingNow ? 'Signing...' : 'Send' }}
+            {{ signingNow ? 'Sending...' : 'Send' }}
           </button>
           <button
             v-if="signingIntent === 'self'"
@@ -1066,12 +1066,9 @@ const setThumbRef = (page: number) => (el: HTMLCanvasElement | null) => {
 };
 
 const fieldsByPage = (page: number) => fields.value.filter((field) => field.page === page);
-const getDefaultSignerEmail = (type: DocumentField['type']) => {
+const getDefaultSignerEmail = () => {
   if (signingIntent.value === 'send') {
-    if (type === 'SIGNATURE' || type === 'INITIAL') {
-      return senderSigner.value?.email ?? recipientSigners.value[0]?.email;
-    }
-    return recipientSigners.value[0]?.email ?? senderSigner.value?.email;
+    return recipientSigners.value[0]?.email ?? senderSigner.value?.email ?? signerInputs.value[0]?.email;
   }
   return senderSigner.value?.email ?? signerInputs.value[0]?.email;
 };
@@ -1233,6 +1230,14 @@ const handleFieldClick = (field: DocumentField) => {
   selectField(field.id);
   if (signingIntent.value === 'self') return;
   if (isSignatureField(field)) {
+    if (signingIntent.value === 'send' && field.signerEmail?.toLowerCase() !== senderEmail.value) {
+      if (field.signerEmail) {
+        setBuilderNotice(`This signature is assigned to ${field.signerEmail}.`);
+      } else {
+        setBuilderNotice('Assign this signature to yourself to sign it now.');
+      }
+      return;
+    }
     void openSignatureModal(field);
   } else {
     openFieldModal(field);
@@ -2127,7 +2132,7 @@ const createFieldAtPosition = async (type: DocumentField['type'], clientX: numbe
     width: defaults.width,
     height: defaults.height,
     required: true,
-    signerEmail: getDefaultSignerEmail(type),
+    signerEmail: getDefaultSignerEmail(),
     options: { normalized },
   };
   const tempId = `temp-${Date.now()}`;
@@ -2420,22 +2425,29 @@ const sendForSigning = async () => {
         ...recipientSigners.value,
       ]
     : [{ name: senderName.value, email: senderEmail.value }];
-  const response = await sendDocument(doc.value.id, {
-    signers: orderedSigners.map((signer, index) => ({
-      email: signer.email,
-      name: signer.name,
-      order: index + 1,
-    })),
-    inviteStrategy: 'sequential',
-  });
-  if (signingIntent.value === 'self') {
-    await refresh();
+  signingNow.value = true;
+  try {
+    const response = await sendDocument(doc.value.id, {
+      signers: orderedSigners.map((signer, index) => ({
+        email: signer.email,
+        name: signer.name,
+        order: index + 1,
+      })),
+      inviteStrategy: 'sequential',
+    });
+    if (signingIntent.value === 'self') {
+      await refresh();
+    }
+    if (response.signingToken) {
+      await router.push(`/sign/${response.signingToken}`);
+      return;
+    }
+    await loadDocument(doc.value.id);
+  } catch (err) {
+    builderError.value = err instanceof Error ? err.message : 'Unable to send document.';
+  } finally {
+    signingNow.value = false;
   }
-  if (response.signingToken) {
-    await router.push(`/sign/${response.signingToken}`);
-    return;
-  }
-  await loadDocument(doc.value.id);
 };
 
 const proceedToBuilder = async (options?: { allowMissingSigners?: boolean }) => {

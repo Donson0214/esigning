@@ -200,15 +200,36 @@ const receivedTotalCount = ref(0);
 const receivedLoading = ref(false);
 const receivedError = ref<string | null>(null);
 let receivedListenerAttached = false;
+let receivedAuthListenerAttached = false;
+
+const getAuthToken = () => {
+  if (typeof localStorage === 'undefined') return null;
+  return localStorage.getItem('auth_token');
+};
 
 const refreshReceivedSummary = async () => {
   receivedLoading.value = true;
   receivedError.value = null;
+  const token = getAuthToken();
+  if (!token) {
+    receivedPendingCount.value = 0;
+    receivedTotalCount.value = 0;
+    receivedLoading.value = false;
+    return;
+  }
   try {
+    connectSocket(token);
     const summary = await getReceivedSummary();
     receivedPendingCount.value = summary.pendingCount;
     receivedTotalCount.value = summary.total;
   } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 401) {
+      receivedPendingCount.value = 0;
+      receivedTotalCount.value = 0;
+      receivedError.value = null;
+      return;
+    }
     receivedError.value = err instanceof Error ? err.message : 'Unable to load received summary.';
   } finally {
     receivedLoading.value = false;
@@ -229,9 +250,18 @@ const attachReceivedListener = () => {
   void refreshReceivedSummary();
 };
 
+const attachReceivedAuthListener = () => {
+  if (receivedAuthListenerAttached || typeof window === 'undefined') return;
+  receivedAuthListenerAttached = true;
+  window.addEventListener('auth:updated', () => {
+    void refreshReceivedSummary();
+  });
+};
+
 export const useReceivedSummary = () => {
   onMounted(() => {
     attachReceivedListener();
+    attachReceivedAuthListener();
   });
 
   return {

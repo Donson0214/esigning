@@ -45,6 +45,84 @@ const toJsonInput = (value: unknown) => {
   return value as Prisma.InputJsonValue;
 };
 
+const fieldTypeValues = new Set(Object.values(FieldType));
+
+const coerceFieldType = (value: unknown): FieldType => {
+  const normalized = String(value ?? '').toUpperCase();
+  if (fieldTypeValues.has(normalized as FieldType)) {
+    return normalized as FieldType;
+  }
+  return FieldType.SIGNATURE;
+};
+
+const coerceNumber = (value: unknown, fallback: number) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+};
+
+const getDefaultFieldSize = (type: FieldType) => {
+  switch (type) {
+    case FieldType.SIGNATURE:
+      return { width: 160, height: 50 };
+    case FieldType.INITIAL:
+      return { width: 90, height: 40 };
+    case FieldType.CHECKBOX:
+      return { width: 22, height: 22 };
+    case FieldType.DATE:
+      return { width: 90, height: 26 };
+    case FieldType.IMAGE:
+      return { width: 140, height: 90 };
+    case FieldType.ATTACHMENT:
+      return { width: 120, height: 32 };
+    default:
+      return { width: 140, height: 32 };
+  }
+};
+
+const normalizeCreateFieldInput = (input: {
+  type?: unknown;
+  label?: unknown;
+  placeholder?: unknown;
+  required?: unknown;
+  value?: unknown;
+  options?: unknown;
+  page?: unknown;
+  x?: unknown;
+  y?: unknown;
+  width?: unknown;
+  height?: unknown;
+}) => {
+  const type = coerceFieldType(input.type);
+  const defaults = getDefaultFieldSize(type);
+  const page = Math.max(1, Math.floor(coerceNumber(input.page, 1)));
+  const width = Math.max(1, coerceNumber(input.width, defaults.width));
+  const height = Math.max(1, coerceNumber(input.height, defaults.height));
+  const x = Math.max(0, coerceNumber(input.x, 0));
+  const y = Math.max(0, coerceNumber(input.y, 0));
+  const required = typeof input.required === 'boolean' ? input.required : true;
+  const label = typeof input.label === 'string' ? input.label : undefined;
+  const placeholder = typeof input.placeholder === 'string' ? input.placeholder : undefined;
+  const value = typeof input.value === 'string' ? input.value : undefined;
+  const options = input.options && typeof input.options === 'object' ? (input.options as Record<string, unknown>) : undefined;
+  return {
+    type,
+    label,
+    placeholder,
+    required,
+    value,
+    options,
+    page,
+    x,
+    y,
+    width,
+    height,
+  };
+};
+
 const buildFieldSummary = (field: {
   id: string;
   signerId: string | null;
@@ -297,7 +375,6 @@ export async function createSigningSession(params: {
   if (signer.status === SignerStatus.DECLINED) {
     throw createHttpError(409, 'SIGNING_DECLINED', 'Signing already declined');
   }
-  await ensureSignerInOrder(signer.documentId, signer.id);
 
   let preHash = signer.document.hash;
   let preHashAlgorithm = signer.document.hashAlgorithm ?? 'SHA-256';
@@ -378,41 +455,41 @@ export async function createSignerField(params: {
   documentId: string;
   signerId: string;
   input: {
-    type: FieldType;
-    label?: string;
-    placeholder?: string;
-    required?: boolean;
-    value?: string;
-    options?: Record<string, unknown>;
-    page: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
+    type?: unknown;
+    label?: unknown;
+    placeholder?: unknown;
+    required?: unknown;
+    value?: unknown;
+    options?: unknown;
+    page?: unknown;
+    x?: unknown;
+    y?: unknown;
+    width?: unknown;
+    height?: unknown;
   };
   meta: RequestMeta;
 }) {
   const signer = await getSignerAndDocument(params.documentId, params.signerId);
   assertDocumentWritable(signer.document);
-  await ensureSignerInOrder(signer.documentId, signer.id);
+  const normalized = normalizeCreateFieldInput(params.input);
 
   const field = await prisma.signatureField.create({
     data: {
       documentId: signer.documentId,
       signerId: signer.id,
       signerEmail: signer.email,
-      type: params.input.type,
-      label: params.input.label ?? null,
-      placeholder: params.input.placeholder ?? null,
-      required: params.input.required ?? true,
-      value: params.input.value ?? null,
-      status: params.input.value ? FieldStatus.FILLED : FieldStatus.EMPTY,
-      options: toJsonInput(params.input.options ?? null),
-      page: params.input.page,
-      x: params.input.x,
-      y: params.input.y,
-      width: params.input.width,
-      height: params.input.height,
+      type: normalized.type,
+      label: normalized.label ?? null,
+      placeholder: normalized.placeholder ?? null,
+      required: normalized.required,
+      value: normalized.value ?? null,
+      status: normalized.value ? FieldStatus.FILLED : FieldStatus.EMPTY,
+      options: toJsonInput(normalized.options ?? null),
+      page: normalized.page,
+      x: normalized.x,
+      y: normalized.y,
+      width: normalized.width,
+      height: normalized.height,
     },
   });
 
@@ -736,7 +813,6 @@ export async function applySignature(params: {
 }) {
   const signer = await getSignerAndDocument(params.documentId, params.signerId);
   assertDocumentWritable(signer.document);
-  await ensureSignerInOrder(signer.documentId, signer.id);
   if (signer.status === SignerStatus.SIGNED) {
     throw createHttpError(409, 'ALREADY_SIGNED', 'Signing already completed');
   }

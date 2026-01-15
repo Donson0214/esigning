@@ -12,11 +12,12 @@
         <div class="status-pill" :class="statusClass">
           {{ doc?.status ?? 'Loading' }}
         </div>
-        <button class="btn btn-primary" type="button" :disabled="!canSign" @click="signDocument">
-          Done
+        <button class="btn btn-primary" type="button" :disabled="!canSign || signingNow" @click="signDocument">
+          {{ signingNow ? 'Sending...' : 'Done' }}
         </button>
       </div>
     </header>
+    <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
     <section v-if="doc" class="builder-body">
       <aside class="left-panel">
@@ -59,6 +60,7 @@
             :ref="setPageRef(page)"
             @dragover.prevent
             @drop="handleDrop($event, page)"
+            @click="handlePageClick($event, page)"
           >
             <canvas :ref="setCanvasRef(page)" class="pdf-canvas"></canvas>
             <div class="overlay">
@@ -69,6 +71,9 @@
                 :class="fieldClass(field)"
                 :style="fieldStyle(field, page)"
                 @click.stop="handleFieldClick(field)"
+                draggable="true"
+                @dragstart="startFieldDrag($event, field)"
+                @dragend="endFieldDrag"
               >
                 <span class="field-label">{{ fieldLabel(field) }}</span>
                 <div v-if="placements[field.id]" class="signature-render">
@@ -100,6 +105,7 @@
                   v-if="placements[field.id]"
                   class="field-clear"
                   type="button"
+                  @pointerdown.stop
                   @click.stop="clearPlacement(field.id)"
                 >
                   x
@@ -143,6 +149,17 @@
             </button>
           </div>
           <p class="helper">Drag a field onto the document to place it.</p>
+        </div>
+
+        <div
+          class="panel-section delete-zone"
+          :class="isDeleteZoneActive && 'active'"
+          @dragover.prevent
+          @dragenter.prevent="isDeleteZoneActive = true"
+          @dragleave.prevent="isDeleteZoneActive = false"
+          @drop.prevent="handleDeleteDrop"
+        >
+          <div class="delete-label">Drop here to delete</div>
         </div>
       </aside>
     </section>
@@ -238,6 +255,9 @@
           <button class="link-btn" type="button" @click="clearSignature">Clear signature</button>
           <button class="btn btn-outline" type="button" @click="clearPlacements" :disabled="!placementCount">
             Clear placements
+          </button>
+          <button class="btn btn-primary" type="button" @click="saveSignature" :disabled="!canSaveSignature">
+            Save signature
           </button>
         </div>
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
@@ -362,6 +382,7 @@ const doc = ref<SignDocState | null>(null);
 const signer = ref<SigningSessionView['signer'] | null>(null);
 const fields = ref<SigningSessionView['fields']>([]);
 const errorMessage = ref('');
+const signingNow = ref(false);
 
 const goBack = () => router.push('/app/documents');
 
@@ -394,8 +415,13 @@ const placements = ref<Record<string, SignaturePlacement>>({});
 const draggingSignature = ref<SignaturePayload | null>(null);
 const signatureModalOpen = ref(false);
 const draggingFieldType = ref<SigningSessionView['fields'][number]['type'] | null>(null);
+const draggingFieldId = ref<string | null>(null);
+const isFieldDragActive = ref(false);
 const pendingPlacementFieldId = ref<string | null>(null);
 const pendingFieldIds = ref<Set<string>>(new Set());
+const deletedFieldIds = ref<Set<string>>(new Set());
+const activePaletteType = ref<SigningSessionView['fields'][number]['type'] | null>(null);
+const isDeleteZoneActive = ref(false);
 const fieldModalOpen = ref(false);
 const activeFieldId = ref<string | null>(null);
 const fieldDraftValue = ref('');
@@ -445,6 +471,8 @@ const placementStorageKey = computed(() =>
 );
 
 const normalizeFieldType = (value: unknown) => String(value ?? '').toUpperCase();
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const isSignatureField = (field: SigningSessionView['fields'][number]) => {
   const type = normalizeFieldType(field?.type);
   return type === 'SIGNATURE' || type === 'INITIAL';
@@ -458,12 +486,20 @@ const getSignatureMeta = (field: SigningSessionView['fields'][number]) => {
   return signature as { mode?: 'draw' | 'type' | 'upload'; font?: string };
 };
 
-const signatureFields = computed(() => fields.value.filter(isSignatureField));
+const visibleFields = computed(() => fields.value.filter((field) => !deletedFieldIds.value.has(field.id)));
+const signatureFields = computed(() => visibleFields.value.filter(isSignatureField));
+const hasSignatureValue = (signature?: SignaturePayload | null) =>
+  Boolean(signature?.dataUrl || signature?.text?.trim());
+const hasSignaturePlacement = (field: SigningSessionView['fields'][number]) => {
+  const placement = placements.value[field.id];
+  return Boolean(placement && hasSignatureValue(placement.signature));
+};
 const missingSignatureCount = computed(
-  () => signatureFields.value.filter((field) => !placements.value[field.id]).length,
+  () => signatureFields.value.filter((field) => !hasSignaturePlacement(field)).length,
 );
 const placementCount = computed(() => Object.keys(placements.value).length);
-const activeField = computed(() => fields.value.find((field) => field.id === activeFieldId.value));
+const canSaveSignature = computed(() => Boolean(activeSignature.value));
+const activeField = computed(() => visibleFields.value.find((field) => field.id === activeFieldId.value));
 const activeFieldType = computed(() => {
   if (!activeField.value) return null;
   return normalizeFieldType(activeField.value.type) as SigningSessionView['fields'][number]['type'];
@@ -510,21 +546,45 @@ const closeSignatureModal = () => {
   }
 };
 
+const saveSignature = () => {
+  errorMessage.value = '';
+  const signature = activeSignature.value;
+  if (!signature) {
+    errorMessage.value = 'Add a signature before saving.';
+    return;
+  }
+  if (pendingPlacementFieldId.value) {
+    const field = fields.value.find((item) => item.id === pendingPlacementFieldId.value);
+    if (field) {
+      placeSignature(field, signature);
+    }
+    pendingPlacementFieldId.value = null;
+  } else {
+    const nextField = signatureFields.value.find((field) => !placements.value[field.id]);
+    if (nextField) {
+      placeSignature(nextField, signature);
+    }
+  }
+  signatureModalOpen.value = false;
+};
+
 const handlePaletteClick = (type: SigningSessionView['fields'][number]['type']) => {
   errorMessage.value = '';
+  activePaletteType.value = type;
   if (type === 'SIGNATURE' || type === 'INITIAL') {
-    void openSignatureModal();
+    if (!activeSignature.value) {
+      void openSignatureModal();
+    }
     return;
   }
   const target = fields.value.find(
     (field) => field.type === type && !isSignatureField(field) && !isFieldFilled(field),
   );
   const fallback = fields.value.find((field) => field.type === type && !isSignatureField(field));
-  if (!target && !fallback) {
-    errorMessage.value = `No ${type.replace('_', ' ').toLowerCase()} field assigned to you.`;
-    return;
+  if (target || fallback) {
+    activePaletteType.value = null;
+    openFieldModal(target ?? fallback!);
   }
-  openFieldModal(target ?? fallback!);
 };
 
 const startPaletteDrag = (event: DragEvent, type: SigningSessionView['fields'][number]['type']) => {
@@ -532,12 +592,15 @@ const startPaletteDrag = (event: DragEvent, type: SigningSessionView['fields'][n
   if (type === 'SIGNATURE' || type === 'INITIAL') {
     draggingSignature.value = activeSignature.value;
   }
+  activePaletteType.value = null;
   event.dataTransfer?.setData('text/plain', `field:${type}`);
 };
 
 const endPaletteDrag = () => {
   draggingFieldType.value = null;
   draggingSignature.value = null;
+  activePaletteType.value = null;
+  isDeleteZoneActive.value = false;
 };
 
 const parseDraggedType = (event: DragEvent) => {
@@ -546,6 +609,135 @@ const parseDraggedType = (event: DragEvent) => {
   const type = raw.slice('field:'.length).trim().toUpperCase();
   const exists = fieldPalette.some((entry) => entry.type === type);
   return exists ? (type as SigningSessionView['fields'][number]['type']) : null;
+};
+
+const parseDraggedFieldId = (event: DragEvent) => {
+  const raw = event.dataTransfer?.getData('text/plain') ?? '';
+  if (!raw.startsWith('placed:')) return null;
+  return raw.slice('placed:'.length).trim();
+};
+
+const startFieldDrag = (event: DragEvent, field: SigningSessionView['fields'][number]) => {
+  draggingFieldId.value = field.id;
+  isFieldDragActive.value = true;
+  draggingFieldType.value = null;
+  draggingSignature.value = null;
+  event.dataTransfer?.setData('text/plain', `placed:${field.id}`);
+};
+
+const endFieldDrag = () => {
+  draggingFieldId.value = null;
+  isFieldDragActive.value = false;
+  isDeleteZoneActive.value = false;
+};
+
+const createFieldFromExisting = async (
+  source: SigningSessionView['fields'][number],
+  clientX: number,
+  clientY: number,
+  page: number,
+) => {
+  if (!doc.value || !token.value) return null;
+  const pageEl = pageRefs.get(page);
+  const size = pageSizes.value[page];
+  if (!pageEl || !size) return null;
+  const rect = pageEl.getBoundingClientRect();
+  const x = Math.max(0, clientX - rect.left);
+  const y = Math.max(0, clientY - rect.top);
+  const pdfX = x / scale.value;
+  const pdfY = size.height - y / scale.value - source.height;
+  const normalized = computeNormalizedRect(
+    {
+      x: pdfX,
+      y: Math.max(0, pdfY),
+      width: source.width,
+      height: source.height,
+    } as SigningSessionView['fields'][number],
+    size,
+  );
+  const options =
+    source.options && typeof source.options === 'object' ? { ...(source.options as Record<string, unknown>) } : {};
+  const payload = {
+    type: source.type,
+    label: source.label ?? undefined,
+    placeholder: source.placeholder ?? undefined,
+    required: source.required ?? true,
+    value: source.value ?? undefined,
+    options: { ...options, normalized },
+    page,
+    x: pdfX,
+    y: Math.max(0, pdfY),
+    width: source.width,
+    height: source.height,
+  };
+  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  pendingFieldIds.value = new Set(pendingFieldIds.value).add(tempId);
+  const optimisticField = {
+    id: tempId,
+    label: payload.label ?? null,
+    placeholder: payload.placeholder ?? null,
+    required: payload.required,
+    value: payload.value ?? null,
+    options: payload.options,
+    page: payload.page,
+    type: payload.type,
+    x: payload.x,
+    y: payload.y,
+    width: payload.width,
+    height: payload.height,
+  } as SigningSessionView['fields'][number];
+  fields.value = [...fields.value, optimisticField];
+  try {
+    const created = await createSigningField({
+      docId: doc.value.id,
+      signingToken: token.value,
+      payload,
+    });
+    fields.value = fields.value.map((field) => (field.id === tempId ? { ...field, ...created } : field));
+    errorMessage.value = '';
+    const nextPending = new Set(pendingFieldIds.value);
+    nextPending.delete(tempId);
+    pendingFieldIds.value = nextPending;
+    return created;
+  } catch (err) {
+    fields.value = fields.value.filter((field) => field.id !== tempId);
+    const nextPending = new Set(pendingFieldIds.value);
+    nextPending.delete(tempId);
+    pendingFieldIds.value = nextPending;
+    errorMessage.value = err instanceof Error ? err.message : 'Unable to move the field.';
+    return null;
+  }
+};
+
+const removeFieldById = (fieldId: string) => {
+  deletedFieldIds.value = new Set(deletedFieldIds.value).add(fieldId);
+  fields.value = fields.value.filter((field) => field.id !== fieldId);
+  if (activeFieldId.value === fieldId) {
+    activeFieldId.value = null;
+    fieldModalOpen.value = false;
+  }
+  if (placements.value[fieldId]) {
+    const next = { ...placements.value };
+    delete next[fieldId];
+    placements.value = next;
+  }
+  if (pendingFieldIds.value.has(fieldId)) {
+    const nextPending = new Set(pendingFieldIds.value);
+    nextPending.delete(fieldId);
+    pendingFieldIds.value = nextPending;
+  }
+};
+
+const handleDeleteDrop = () => {
+  if (draggingFieldId.value) {
+    removeFieldById(draggingFieldId.value);
+  }
+  draggingFieldType.value = null;
+  draggingSignature.value = null;
+  activePaletteType.value = null;
+  draggingFieldId.value = null;
+  isFieldDragActive.value = false;
+  isDeleteZoneActive.value = false;
 };
 
 const getFieldChoices = (field: SigningSessionView['fields'][number]) => {
@@ -684,10 +876,7 @@ const resolveSignatureArtifact = () => {
   return { type: 'TYPED' as const, data: fallback };
 };
 
-const canSign = computed(() => {
-  if (!doc.value || !sessionView.value) return false;
-  return missingSignatureCount.value === 0;
-});
+const canSign = computed(() => Boolean(doc.value && sessionView.value));
 
 const statusClass = computed(() => {
   const status = doc.value?.status;
@@ -698,7 +887,8 @@ const statusClass = computed(() => {
   return 'neutral';
 });
 
-const fieldsByPage = (page: number) => fields.value.filter((field) => field.page === page);
+const fieldsByPage = (page: number) =>
+  visibleFields.value.filter((field) => field.page === page);
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -862,6 +1052,7 @@ const placeSignature = (field: SigningSessionView['fields'][number], signature?:
 };
 
 const handleFieldClick = (field: SigningSessionView['fields'][number]) => {
+  if (isFieldDragActive.value) return;
   if (isSignatureField(field)) {
     if (!activeSignature.value) {
       void openSignatureModal();
@@ -888,7 +1079,7 @@ const clearPlacements = () => {
 
 const persistPlacements = () => {
   if (!placementStorageKey.value) return;
-  const data = Object.values(placements.value);
+  const data = Object.values(placements.value).filter((item) => !deletedFieldIds.value.has(item.fieldId));
   localStorage.setItem(placementStorageKey.value, JSON.stringify(data));
 };
 
@@ -903,9 +1094,11 @@ const loadPlacements = () => {
     const next: Record<string, SignaturePlacement> = {};
     parsed.forEach((item) => {
       if (!item || !fieldIds.has(item.fieldId)) return;
+      if (deletedFieldIds.value.has(item.fieldId)) return;
       if (!item.normalized || !item.signature) return;
       const field = fieldMap.get(item.fieldId);
       const signature = field ? normalizeSignatureForField(field, item.signature) : item.signature;
+      if (!hasSignatureValue(signature)) return;
       next[item.fieldId] = { ...item, signature };
     });
     placements.value = next;
@@ -919,6 +1112,7 @@ const seedPlacementsFromFields = () => {
   const next = { ...placements.value };
   for (const field of fields.value) {
     if (!isSignatureField(field)) continue;
+    if (deletedFieldIds.value.has(field.id)) continue;
     if (next[field.id]) continue;
     const signature = buildSignatureFromField(field);
     if (!signature) continue;
@@ -992,6 +1186,7 @@ const createFieldAtPosition = async (
       payload,
     });
     fields.value = fields.value.map((field) => (field.id === tempId ? { ...field, ...created } : field));
+    errorMessage.value = '';
     const nextPending = new Set(pendingFieldIds.value);
     nextPending.delete(tempId);
     pendingFieldIds.value = nextPending;
@@ -1010,6 +1205,24 @@ const handleDrop = async (event: DragEvent, page: number) => {
   const pageEl = pageRefs.get(page);
   const size = pageSizes.value[page];
   if (!pageEl || !size) return;
+  const draggedFieldId = parseDraggedFieldId(event) ?? draggingFieldId.value;
+  if (draggedFieldId) {
+    const field = fields.value.find((item) => item.id === draggedFieldId);
+    if (field) {
+      const existingSignature = placements.value[field.id]?.signature ?? null;
+      const created = await createFieldFromExisting(field, event.clientX, event.clientY, page);
+      if (created) {
+        if (existingSignature) {
+          placeSignature(created, existingSignature);
+        }
+        removeFieldById(field.id);
+      }
+    }
+    draggingFieldId.value = null;
+    isFieldDragActive.value = false;
+    activePaletteType.value = null;
+    return;
+  }
   const rect = pageEl.getBoundingClientRect();
   const viewportWidth = size.width * scale.value;
   const viewportHeight = size.height * scale.value;
@@ -1050,6 +1263,7 @@ const handleDrop = async (event: DragEvent, page: number) => {
     }
     draggingFieldType.value = null;
     draggingSignature.value = null;
+    activePaletteType.value = null;
     return;
   }
   const signature = draggingSignature.value ?? activeSignature.value;
@@ -1066,6 +1280,24 @@ const handleDrop = async (event: DragEvent, page: number) => {
     }
   }
   draggingSignature.value = null;
+  activePaletteType.value = null;
+};
+
+const handlePageClick = async (event: MouseEvent, page: number) => {
+  if (signatureModalOpen.value || fieldModalOpen.value || isFieldDragActive.value) return;
+  const type = activePaletteType.value;
+  if (!type) return;
+  const created = await createFieldAtPosition(type, event.clientX, event.clientY, page);
+  if (created && isSignatureField(created)) {
+    const signature = activeSignature.value;
+    if (signature) {
+      placeSignature(created, signature);
+    } else {
+      pendingPlacementFieldId.value = created.id;
+      void openSignatureModal();
+    }
+  }
+  activePaletteType.value = null;
 };
 
 const startSignatureDrag = (event: DragEvent) => {
@@ -1092,6 +1324,7 @@ const loadSession = async () => {
       version: 1,
     };
     fields.value = sessionView.value.fields;
+    deletedFieldIds.value = new Set();
     await nextTick();
     await loadPdf();
     loadPlacements();
@@ -1193,12 +1426,8 @@ const handleFieldUpload = (event: Event) => {
 };
 
 const signDocument = async () => {
-  if (!doc.value || !sessionView.value || !canSign.value) return;
+  if (!doc.value || !sessionView.value || !canSign.value || signingNow.value) return;
   errorMessage.value = '';
-  if (pendingFieldIds.value.size > 0) {
-    errorMessage.value = 'Please wait for fields to finish placing before signing.';
-    return;
-  }
 
   const optimistic = optimisticManager.begin(doc.value, {
     description: 'signature-applied',
@@ -1206,18 +1435,26 @@ const signDocument = async () => {
   });
   doc.value = optimistic.nextState;
 
+  signingNow.value = true;
   try {
-    const clientMutationId = createId();
     const correlationId = optimistic.mutation.correlationId;
-    const session = await createSigningSession(doc.value.id, token.value, clientMutationId, correlationId);
+    const session = await createSigningSession(doc.value.id, token.value, undefined, correlationId);
 
-    const fieldsPayload = fields.value.map((field) => {
+    const pendingIds = pendingFieldIds.value;
+    const removedIds = deletedFieldIds.value;
+    const fieldsPayload: Array<{ fieldId: string; value: string }> = [];
+    for (const field of fields.value) {
+      if (pendingIds.has(field.id) || removedIds.has(field.id) || !isUuid(field.id)) {
+        continue;
+      }
       if (isSignatureField(field)) {
         const placement = placements.value[field.id];
-        return { fieldId: field.id, value: resolveSignatureValue(field, placement) };
+        const value = resolveSignatureValue(field, placement);
+        fieldsPayload.push({ fieldId: field.id, value });
+        continue;
       }
-      return { fieldId: field.id, value: resolveFieldValue(field) };
-    });
+      fieldsPayload.push({ fieldId: field.id, value: resolveFieldValue(field) });
+    }
 
     await submitManifest({
       docId: doc.value.id,
@@ -1255,7 +1492,10 @@ const signDocument = async () => {
     await router.push('/app/documents');
   } catch (err) {
     doc.value = optimisticManager.reject(doc.value, optimistic.mutation.id);
-    errorMessage.value = err instanceof Error ? err.message : 'Unable to apply signature.';
+    const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+    errorMessage.value = message || (err instanceof Error ? err.message : 'Unable to apply signature.');
+  } finally {
+    signingNow.value = false;
   }
 };
 
@@ -1726,6 +1966,27 @@ onBeforeUnmount(() => {
 .palette-label {
   font-weight: 500;
   color: var(--ink);
+}
+
+.delete-zone {
+  margin-top: 0.8rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--ink-muted);
+  background: rgba(240, 68, 56, 0.04);
+}
+
+.delete-zone.active {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.delete-label {
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .thumb-list {

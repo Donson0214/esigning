@@ -44,7 +44,7 @@ export async function getSigningFile(req: Request, res: Response, next: NextFunc
 
 export async function submitSigning(req: Request, res: Response, next: NextFunction) {
   try {
-    const payload = submitSignatureSchema.parse(req.body);
+    const payload = submitSignatureSchema.parse(req.body ?? {});
     const token = getParam(req.params.token);
     if (!token) {
       return res.status(400).json({ error: 'TOKEN_REQUIRED' });
