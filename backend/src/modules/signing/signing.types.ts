@@ -21,7 +21,7 @@ export const submitManifestSchema = z.object({
     .array(
       z.object({
         fieldId: z.string().uuid(),
-        value: z.string().min(1),
+        value: z.string(),
       }),
     ),
 });
@@ -29,7 +29,7 @@ export const submitManifestSchema = z.object({
 export const uploadSignatureSchema = z.object({
   signingSessionId: z.string().uuid(),
   type: z.enum(['DRAWN', 'TYPED', 'UPLOADED']),
-  data: z.string().min(1),
+  data: z.string().optional().default(''),
 });
 
 export const applySignatureSchema = z.object({

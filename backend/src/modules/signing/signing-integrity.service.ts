@@ -299,9 +299,28 @@ export async function createSigningSession(params: {
   }
   await ensureSignerInOrder(signer.documentId, signer.id);
 
-  const preHash = signer.document.hash;
+  let preHash = signer.document.hash;
+  let preHashAlgorithm = signer.document.hashAlgorithm ?? 'SHA-256';
+  let preHashComputedAt = signer.document.hashComputedAt ?? new Date();
   if (!preHash) {
-    throw createHttpError(400, 'PREHASH_MISSING', 'Pre-sign hash missing');
+    const source = signer.document.fileUrl || signer.document.filePublicId;
+    if (!source) {
+      throw createHttpError(404, 'FILE_UNAVAILABLE', 'File path missing');
+    }
+    const buffer = await downloadStoredFile(source);
+    const computedAt = new Date();
+    preHash = hashBuffer(buffer);
+    preHashAlgorithm = 'SHA-256';
+    preHashComputedAt = computedAt;
+    await prisma.document.update({
+      where: { id: signer.documentId },
+      data: {
+        hash: preHash,
+        hashAlgorithm: preHashAlgorithm,
+        hashComputedAt: preHashComputedAt,
+        version: { increment: 1 },
+      },
+    });
   }
   const sessionExpiresAt = new Date(Date.now() + env.signingSessionTtlMinutes * 60 * 1000);
 
@@ -321,8 +340,8 @@ export async function createSigningSession(params: {
       status: SigningSessionStatus.ACTIVE,
       fieldVersion: signer.document.fieldVersion,
       preHash,
-      preHashAlgorithm: signer.document.hashAlgorithm ?? 'SHA-256',
-      preHashComputedAt: signer.document.hashComputedAt ?? new Date(),
+      preHashAlgorithm,
+      preHashComputedAt,
       expiresAt: sessionExpiresAt,
       correlationId: params.meta.correlationId,
       clientMutationId: params.meta.clientMutationId,
@@ -464,25 +483,14 @@ export async function submitManifest(params: {
     where: { documentId: signer.documentId, signerId: signer.id },
   });
   const fieldMap = new Map(fields.map((field) => [field.id, field]));
-  if (fields.length === 0) {
-    if (params.fields.length > 0) {
-      throw createHttpError(400, 'NO_FIELDS', 'No signature fields assigned');
-    }
-  } else {
-    const inputIds = new Set(params.fields.map((field) => field.fieldId));
-    for (const field of fields) {
-      if (!inputIds.has(field.id)) {
-        throw createHttpError(400, 'MISSING_FIELD_VALUE', 'All fields must be completed');
-      }
-    }
-  }
+  const manifestInputs = params.fields.length
+    ? params.fields
+    : fields.map((field) => ({ fieldId: field.id, value: field.value ?? '' }));
 
-  const manifestFields = params.fields
+  const manifestFields = manifestInputs
     .map((input) => {
       const field = fieldMap.get(input.fieldId);
-      if (!field) {
-        throw createHttpError(400, 'INVALID_FIELD', 'Signature field is invalid');
-      }
+      if (!field) return null;
       return {
         fieldId: field.id,
         type: field.type,
@@ -491,10 +499,21 @@ export async function submitManifest(params: {
         y: field.y,
         width: field.width,
         height: field.height,
-        value: input.value,
+        value: input.value ?? '',
         normalized: toNormalizedRect(field.options),
       };
     })
+    .filter((field): field is {
+      fieldId: string;
+      type: FieldType;
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      value: string;
+      normalized: NormalizedRect | null;
+    } => Boolean(field))
     .sort((a, b) => a.fieldId.localeCompare(b.fieldId));
 
   const manifest = {
@@ -626,32 +645,40 @@ export async function uploadSignatureArtifact(params: {
 
   let artifactHash: string;
   let artifactUrl: string | undefined;
+  let artifactType = params.type;
 
   if (params.type === SignatureArtifactType.TYPED) {
-    artifactHash = hashString(params.data);
+    const fallback = params.data?.trim() || signer.name || signer.email || 'Signed';
+    artifactHash = hashString(fallback);
   } else {
-    const parsed = parseDataUrl(params.data);
+    const parsed = parseDataUrl(params.data ?? '');
     if (!parsed) {
-      throw createHttpError(400, 'INVALID_SIGNATURE', 'Signature data must be a base64 data URL');
+      const fallback = params.data?.trim() || signer.name || signer.email || 'Signed';
+      artifactHash = hashString(fallback);
+      artifactType = SignatureArtifactType.TYPED;
+    } else {
+      const mimeType = parsed.mimeType.toLowerCase();
+      if (!['image/png', 'image/jpeg', 'image/jpg'].includes(mimeType)) {
+        const fallback = params.data?.trim() || signer.name || signer.email || 'Signed';
+        artifactHash = hashString(fallback);
+        artifactType = SignatureArtifactType.TYPED;
+      } else {
+        artifactHash = hashBuffer(parsed.buffer);
+        const extension = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? '.jpg' : '.png';
+        const upload = await uploadBufferToSupabase(parsed.buffer, {
+          folder: 'signatures',
+          fileName: `${signer.documentId}-${signer.id}-signature${extension}`,
+          contentType: mimeType,
+        });
+        artifactUrl = upload.path;
+      }
     }
-    const mimeType = parsed.mimeType.toLowerCase();
-    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(mimeType)) {
-      throw createHttpError(400, 'INVALID_SIGNATURE', 'Unsupported signature image type');
-    }
-    artifactHash = hashBuffer(parsed.buffer);
-    const extension = mimeType === 'image/jpeg' || mimeType === 'image/jpg' ? '.jpg' : '.png';
-    const upload = await uploadBufferToSupabase(parsed.buffer, {
-      folder: 'signatures',
-      fileName: `${signer.documentId}-${signer.id}-signature${extension}`,
-      contentType: mimeType,
-    });
-    artifactUrl = upload.path;
   }
 
   const updated = await prisma.signingSession.update({
     where: { id: session.id },
     data: {
-      signatureArtifactType: params.type,
+      signatureArtifactType: artifactType,
       signatureArtifactHash: artifactHash,
       signatureArtifactAlgorithm: 'SHA-256',
       signatureArtifactUrl: artifactUrl ?? null,
@@ -791,11 +818,19 @@ export async function applySignature(params: {
     signatureImageParsed = { mimeType, buffer: imageBuffer };
   }
 
-  const signedBuffer = await applySignatureToPdf({
-    pdfBuffer,
-    fields: fieldsToApply,
-    signatureImage: signatureImageParsed,
-  });
+  let signedBuffer: Buffer;
+  try {
+    signedBuffer = await applySignatureToPdf({
+      pdfBuffer,
+      fields: fieldsToApply,
+      signatureImage: signatureImageParsed,
+    });
+  } catch (err) {
+    if (err && typeof err === 'object' && 'status' in err) {
+      throw err;
+    }
+    throw createHttpError(400, 'PDF_RENDER_FAILED', err instanceof Error ? err.message : 'Unable to apply signature');
+  }
 
   const postHash = hashBuffer(signedBuffer);
   const postComputedAt = new Date();

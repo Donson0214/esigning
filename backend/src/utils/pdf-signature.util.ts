@@ -108,14 +108,31 @@ export async function applySignatureToPdf(params: {
     return image;
   };
 
+  const totalPages = pdfDoc.getPageCount();
+
+  const toPdfText = (value: string) => value.replace(/[^\x20-\x7E]/g, '');
+
   for (const field of params.fields) {
+    if (!Number.isFinite(field.page) || field.page < 1) continue;
     const pageIndex = Math.max(0, field.page - 1);
+    if (pageIndex >= totalPages) continue;
     const page = pdfDoc.getPage(pageIndex);
-    if (!page) continue;
     const rect = resolveFieldRect(field, page);
+    if (
+      !Number.isFinite(rect.x) ||
+      !Number.isFinite(rect.y) ||
+      !Number.isFinite(rect.width) ||
+      !Number.isFinite(rect.height) ||
+      rect.width <= 0 ||
+      rect.height <= 0
+    ) {
+      continue;
+    }
 
     const drawText = (text: string, size: number) => {
-      page.drawText(text, {
+      const safe = toPdfText(text);
+      if (!safe) return;
+      page.drawText(safe, {
         x: rect.x,
         y: rect.y + rect.height / 3,
         size,
@@ -135,7 +152,9 @@ export async function applySignatureToPdf(params: {
           height: rect.height,
         });
       } else if (value) {
-        page.drawText(value, {
+        const safeValue = toPdfText(value);
+        if (!safeValue) continue;
+        page.drawText(safeValue, {
           x: rect.x,
           y: rect.y + rect.height / 3,
           size: Math.min(18, rect.height),
@@ -172,7 +191,7 @@ export async function applySignatureToPdf(params: {
     if (field.type === 'CHECKBOX') {
       const checked = field.value?.toLowerCase() === 'true' || field.value === '1' || field.value === 'checked';
       if (checked) {
-        page.drawText('✓', {
+        page.drawText('X', {
           x: rect.x + rect.width / 4,
           y: rect.y + rect.height / 4,
           size: Math.min(16, rect.height),
@@ -183,20 +202,25 @@ export async function applySignatureToPdf(params: {
     }
 
     if (field.type === 'IMAGE') {
-      if (field.value?.startsWith('data:image')) {
-        const base64Data = field.value.split(',')[1];
-        if (base64Data) {
-          const buffer = Buffer.from(base64Data, 'base64');
-          const isPng = buffer.subarray(0, 4).toString('hex') === '89504e47';
-          const embedded = isPng ? await pdfDoc.embedPng(buffer) : await pdfDoc.embedJpg(buffer);
-          page.drawImage(embedded, {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
-          });
-        }
+      const value = field.value ?? '';
+      if (!value.startsWith('data:image')) continue;
+      const parsed = parseDataUrl(value);
+      if (!parsed) continue;
+      const mimeType = parsed.mimeType.toLowerCase();
+      let embedded: any;
+      if (mimeType.includes('png')) {
+        embedded = await pdfDoc.embedPng(parsed.buffer);
+      } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+        embedded = await pdfDoc.embedJpg(parsed.buffer);
+      } else {
+        continue;
       }
+      page.drawImage(embedded, {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      });
     }
 
     if (field.type === 'ATTACHMENT') {

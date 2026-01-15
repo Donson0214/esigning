@@ -75,6 +75,7 @@ export function renderEmailTemplate(template: EmailTemplateType, data: EmailTemp
   const signerName = data.signerName ? escapeHtml(data.signerName) : 'A signer';
   if (template === 'signer.invited') {
     const subject = `You've been invited to sign: ${documentTitle}`;
+    const expires = data.expiresAt ? `This link expires at ${data.expiresAt}.` : '';
     const portalText = data.portalUrl ? `\nOr sign in here: ${data.portalUrl}` : '';
     const text = `Hi ${recipientName},\n\n${senderName} invited you to sign "${documentTitle}".\n${expires ? `${expires}\n` : ''}Open the link: ${data.actionUrl}${portalText}\n\nIf you did not expect this, you can ignore this email.`;
     const body = `<p>Hi ${recipientName},</p>
