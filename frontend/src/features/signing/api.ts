@@ -109,3 +109,30 @@ export async function applySignature(params: {
   }, params.correlationId);
   return result;
 }
+
+export async function createSigningField(params: {
+  docId: string;
+  signingToken: string;
+  payload: {
+    type: FieldType;
+    label?: string | null;
+    placeholder?: string | null;
+    required?: boolean;
+    value?: string | null;
+    options?: Record<string, unknown> | null;
+    page: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  correlationId?: string;
+}) {
+  const result = await requestWithCorrelation<SigningSessionView['fields'][number]>({
+    method: 'POST',
+    url: `/docs/${params.docId}/fields`,
+    headers: { 'x-signing-token': params.signingToken },
+    data: params.payload,
+  }, params.correlationId);
+  return result;
+}

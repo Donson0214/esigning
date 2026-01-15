@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { createHttpError } from './http-error.util';
-import type { ParsedDataUrl } from './signature.util';
+import { parseDataUrl, type ParsedDataUrl } from './signature.util';
 
 type PdfFieldValue = {
   type:
@@ -73,6 +73,7 @@ export async function applySignatureToPdf(params: {
   const pdfDoc = await PDFDocument.load(params.pdfBuffer);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const ink = rgb(0, 0, 0);
 
   let embeddedImage: any;
   if (params.signatureImage?.buffer) {
@@ -85,6 +86,27 @@ export async function applySignatureToPdf(params: {
       throw createHttpError(400, 'UNSUPPORTED_SIGNATURE_IMAGE', 'Unsupported signature image type');
     }
   }
+  const embeddedImages = new Map<string, any>();
+  const embedImageFromValue = async (value: string) => {
+    if (embeddedImages.has(value)) {
+      return embeddedImages.get(value);
+    }
+    const parsed = parseDataUrl(value);
+    if (!parsed) {
+      throw createHttpError(400, 'INVALID_SIGNATURE', 'Signature data must be a base64 data URL');
+    }
+    const mimeType = parsed.mimeType.toLowerCase();
+    let image: any;
+    if (mimeType.includes('png')) {
+      image = await pdfDoc.embedPng(parsed.buffer);
+    } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+      image = await pdfDoc.embedJpg(parsed.buffer);
+    } else {
+      throw createHttpError(400, 'UNSUPPORTED_SIGNATURE_IMAGE', 'Unsupported signature image type');
+    }
+    embeddedImages.set(value, image);
+    return image;
+  };
 
   for (const field of params.fields) {
     const pageIndex = Math.max(0, field.page - 1);
@@ -98,25 +120,34 @@ export async function applySignatureToPdf(params: {
         y: rect.y + rect.height / 3,
         size,
         font,
-        color: rgb(0.1, 0.1, 0.12),
+        color: ink,
       });
     };
 
     if (field.type === 'SIGNATURE') {
-      if (embeddedImage) {
-        page.drawImage(embeddedImage, {
+      const value = field.value ?? '';
+      if (value.startsWith('data:image')) {
+        const fieldImage = await embedImageFromValue(value);
+        page.drawImage(fieldImage, {
           x: rect.x,
           y: rect.y,
           width: rect.width,
           height: rect.height,
         });
-      } else {
-        page.drawText(field.value, {
+      } else if (value) {
+        page.drawText(value, {
           x: rect.x,
           y: rect.y + rect.height / 3,
           size: Math.min(18, rect.height),
           font: fontBold,
-          color: rgb(0.15, 0.15, 0.2),
+          color: ink,
+        });
+      } else if (embeddedImage) {
+        page.drawImage(embeddedImage, {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
         });
       }
     }

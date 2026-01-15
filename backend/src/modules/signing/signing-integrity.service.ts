@@ -3,6 +3,7 @@ import {
   AuditEventType,
   DocumentStatus,
   FieldStatus,
+  FieldType,
   SignerStatus,
   SignatureArtifactType,
   SigningSessionStatus,
@@ -38,6 +39,41 @@ type ManifestFieldInput = {
 
 type NormalizedRect = { x: number; y: number; width: number; height: number };
 
+const toJsonInput = (value: unknown) => {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.DbNull;
+  return value as Prisma.InputJsonValue;
+};
+
+const buildFieldSummary = (field: {
+  id: string;
+  signerId: string | null;
+  type: FieldType;
+  label?: string | null;
+  required?: boolean | null;
+  value?: string | null;
+  status?: FieldStatus | null;
+  options?: Prisma.JsonValue | null;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}) => ({
+  id: field.id,
+  signerId: field.signerId ?? '',
+  type: field.type,
+  label: field.label ?? null,
+  required: field.required ?? true,
+  value: field.value ?? null,
+  status: (field.status ?? FieldStatus.EMPTY) as 'EMPTY' | 'FILLED' | 'SIGNED',
+  options: (field.options ?? null) as Record<string, unknown> | null,
+  page: field.page,
+  x: field.x,
+  y: field.y,
+  width: field.width,
+  height: field.height,
+});
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 const toNormalizedRect = (options: Prisma.JsonValue | null | undefined): NormalizedRect | null => {
@@ -118,12 +154,14 @@ async function inviteNextSigner(params: {
   });
 
   const link = `${env.signingAppUrl}/${token}`;
+  const portalUrl = `${env.appBaseUrl}/login?redirect=/app/received`;
   const emailMessage = buildNotificationEmail('signer.invited', {
     recipientName: updatedSigner.name ?? updatedSigner.email,
     documentTitle: params.documentTitle,
     senderName: params.ownerName,
     orgName: params.ownerName,
     actionUrl: link,
+    portalUrl,
     expiresAt: expiresAt.toISOString(),
   });
 
@@ -315,6 +353,85 @@ export async function createSigningSession(params: {
   );
 
   return { signingSessionId: session.id, expiresAt: sessionExpiresAt.toISOString() };
+}
+
+export async function createSignerField(params: {
+  documentId: string;
+  signerId: string;
+  input: {
+    type: FieldType;
+    label?: string;
+    placeholder?: string;
+    required?: boolean;
+    value?: string;
+    options?: Record<string, unknown>;
+    page: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  meta: RequestMeta;
+}) {
+  const signer = await getSignerAndDocument(params.documentId, params.signerId);
+  assertDocumentWritable(signer.document);
+  await ensureSignerInOrder(signer.documentId, signer.id);
+
+  const field = await prisma.signatureField.create({
+    data: {
+      documentId: signer.documentId,
+      signerId: signer.id,
+      signerEmail: signer.email,
+      type: params.input.type,
+      label: params.input.label ?? null,
+      placeholder: params.input.placeholder ?? null,
+      required: params.input.required ?? true,
+      value: params.input.value ?? null,
+      status: params.input.value ? FieldStatus.FILLED : FieldStatus.EMPTY,
+      options: toJsonInput(params.input.options ?? null),
+      page: params.input.page,
+      x: params.input.x,
+      y: params.input.y,
+      width: params.input.width,
+      height: params.input.height,
+    },
+  });
+
+  const auditEvent = await prisma.auditEvent.create({
+    data: {
+      documentId: signer.documentId,
+      actorType: AuditActorType.SIGNER,
+      actorSignerId: signer.id,
+      eventType: AuditEventType.FIELD_UPDATED,
+      ipAddress: params.meta.ipAddress,
+      userAgent: params.meta.userAgent,
+      metadata: { action: 'created', fieldId: field.id },
+    },
+  });
+
+  await emitEvent(
+    createEvent({
+      event: 'doc.field.updated',
+      orgId: signer.document.ownerId,
+      docId: signer.documentId,
+      actor: { userId: signer.id, role: 'SIGNER', email: signer.email },
+      correlationId: params.meta.correlationId,
+      data: { fields: [buildFieldSummary(field)] },
+    }),
+  );
+
+  await emitEvent(
+    createEvent({
+      event: 'doc.audit.appended',
+      orgId: signer.document.ownerId,
+      docId: signer.documentId,
+      actor: { userId: signer.id, role: 'SIGNER', email: signer.email },
+      correlationId: params.meta.correlationId,
+      data: { auditEventId: auditEvent.id, eventType: auditEvent.eventType },
+    }),
+  );
+
+  return field;
 }
 
 export async function submitManifest(params: {

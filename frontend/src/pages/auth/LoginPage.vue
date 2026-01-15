@@ -146,7 +146,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { RouterLink, useRouter } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { googleAuth, login } from '@/features/auth/api';
 
@@ -161,6 +161,15 @@ const isSubmitting = ref(false);
 const isGoogleSubmitting = ref(false);
 const errorMessage = ref('');
 const router = useRouter();
+const route = useRoute();
+
+const resolveRedirect = () => {
+  const redirect = route.query.redirect;
+  if (typeof redirect === 'string' && redirect.startsWith('/app/')) {
+    return redirect;
+  }
+  return '/app/dashboard';
+};
 
 const getAuthErrorMessage = (error: unknown, fallback: string) => {
   const message =
@@ -175,7 +184,7 @@ const handleLogin = async () => {
   isSubmitting.value = true;
   try {
     await login({ email: form.email, password: form.password });
-    router.push('/app/dashboard');
+    router.push(resolveRedirect());
   } catch (error: any) {
     errorMessage.value = getAuthErrorMessage(error, 'Unable to sign in right now.');
   } finally {
@@ -188,7 +197,7 @@ const openGoogle = async () => {
   isGoogleSubmitting.value = true;
   try {
     await googleAuth();
-    router.push('/app/dashboard');
+    router.push(resolveRedirect());
   } catch (error: any) {
     errorMessage.value = error?.message ?? 'Google sign-in failed.';
   } finally {
@@ -198,7 +207,7 @@ const openGoogle = async () => {
 
 onMounted(() => {
   if (localStorage.getItem('auth_token')) {
-    router.replace('/app/dashboard');
+    router.replace(resolveRedirect());
   }
 });
 </script>

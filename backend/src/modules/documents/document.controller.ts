@@ -46,10 +46,35 @@ export async function listDocuments(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function listReceivedDocuments(req: Request, res: Response, next: NextFunction) {
+  try {
+    const documents = await documentService.listReceivedDocuments(req.user!.id);
+    res.json({ documents });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function listReceivedSummary(req: Request, res: Response, next: NextFunction) {
   try {
     const summary = await documentService.getReceivedSummary(req.user!.id);
     res.json(summary);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createSigningToken(req: Request, res: Response, next: NextFunction) {
+  try {
+    const documentId = getParam(req.params.id);
+    if (!documentId) {
+      return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+    }
+    const result = await documentService.createSigningTokenForUser({
+      userId: req.user!.id,
+      documentId,
+    });
+    res.json(result);
   } catch (err) {
     next(err);
   }

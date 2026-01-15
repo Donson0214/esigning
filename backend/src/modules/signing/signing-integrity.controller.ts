@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import {
   applySignatureSchema,
   createSigningSessionSchema,
+  createSignerFieldSchema,
   submitManifestSchema,
   uploadSignatureSchema,
 } from './signing.types';
@@ -82,6 +83,41 @@ export async function createSigningSession(req: Request, res: Response, next: Ne
         userAgent: req.get('user-agent') ?? undefined,
         correlationId: req.correlationId,
         clientMutationId: input.clientMutationId,
+      },
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    const docId = getParam(req.params.docId);
+    if (docId && err instanceof Error) {
+      void emitSignatureRejected(
+        req,
+        docId,
+        (err as any).code ?? 'VALIDATION_FAILED',
+        err.message,
+      );
+    }
+    next(err);
+  }
+}
+
+export async function createSignerField(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = createSignerFieldSchema.parse(req.body);
+    const documentId = getParam(req.params.docId);
+    if (!documentId) {
+      return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+    }
+    if (!req.signer) {
+      return res.status(401).json({ error: 'SIGNER_REQUIRED' });
+    }
+    const result = await signingIntegrityService.createSignerField({
+      documentId,
+      signerId: req.signer.id,
+      input,
+      meta: {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? undefined,
+        correlationId: req.correlationId,
       },
     });
     res.status(201).json(result);

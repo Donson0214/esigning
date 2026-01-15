@@ -1,6 +1,13 @@
 import { apiClient } from '@/shared/lib/axios';
 import { requestWithCorrelation } from '@/shared/lib/request';
-import type { Document, DocumentAuditReport, DocumentListResponse, DocumentField, ReceivedSummaryResponse } from './types';
+import type {
+  Document,
+  DocumentAuditReport,
+  DocumentListResponse,
+  DocumentField,
+  ReceivedSummaryResponse,
+  ReceivedDocumentRecord,
+} from './types';
 
 export async function listDocuments() {
   const response = await apiClient.get<DocumentListResponse>('/documents');
@@ -9,6 +16,18 @@ export async function listDocuments() {
 
 export async function getReceivedSummary() {
   const response = await apiClient.get<ReceivedSummaryResponse>('/documents/received/summary');
+  return response.data;
+}
+
+export async function listReceivedDocuments() {
+  const response = await apiClient.get<{ documents: ReceivedDocumentRecord[] }>('/documents/received');
+  return response.data.documents;
+}
+
+export async function createSigningToken(documentId: string) {
+  const response = await apiClient.post<{ signingToken: string; expiresAt: string }>(
+    `/documents/${documentId}/signing-token`,
+  );
   return response.data;
 }
 

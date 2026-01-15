@@ -65,6 +65,22 @@ export type ReceivedSummaryResponse = {
   total: number;
 };
 
+export type ReceivedDocumentRecord = {
+  documentId: string;
+  title: string;
+  status: DocumentStatus;
+  sentAt: string;
+  signerStatus: SignerStatus;
+  signerId: string;
+  signerEmail: string;
+  signingExpiresAt?: string | null;
+  sender: {
+    email: string;
+    name: string;
+  };
+  canSign: boolean;
+};
+
 export type DocumentAuditReport = {
   document: {
     id: string;

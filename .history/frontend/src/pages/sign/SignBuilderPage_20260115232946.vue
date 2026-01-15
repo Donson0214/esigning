@@ -2302,10 +2302,6 @@ const signNowAndSend = async () => {
     builderError.value = 'Add a signature or initial field for yourself before signing.';
     return;
   }
-  if (senderSignatureFields.some((field) => !(field.value ?? '').trim())) {
-    builderError.value = 'Add your signature or initials to all of your signature fields before signing.';
-    return;
-  }
   if (fields.value.length === 0) {
     builderError.value = 'Place at least one field before signing.';
     return;

@@ -5,6 +5,7 @@ import { signingRateLimit } from '../../middlewares/rate-limit.middleware';
 import {
   applySignature,
   completeDocument,
+  createSignerField,
   createSigningSession,
   getAuditReport,
   precomputeHash,
@@ -16,6 +17,7 @@ export const signingIntegrityRoutes = Router();
 
 signingIntegrityRoutes.post('/:docId/hash/precompute', requireAuth, precomputeHash);
 signingIntegrityRoutes.post('/:docId/signing-sessions', signingRateLimit, requireSigningToken, createSigningSession);
+signingIntegrityRoutes.post('/:docId/fields', signingRateLimit, requireSigningToken, createSignerField);
 signingIntegrityRoutes.post('/:docId/manifest', signingRateLimit, requireSigningToken, submitManifest);
 signingIntegrityRoutes.post('/:docId/signature', signingRateLimit, requireSigningToken, uploadSignature);
 signingIntegrityRoutes.post('/:docId/apply-signature', signingRateLimit, requireSigningToken, applySignature);

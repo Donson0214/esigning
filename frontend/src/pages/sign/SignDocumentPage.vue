@@ -81,6 +81,21 @@
                     {{ placements[field.id].signature.text }}
                   </span>
                 </div>
+                <div
+                  v-else-if="field.type === 'IMAGE' && field.value && field.value.startsWith('data:image')"
+                  class="signature-render"
+                >
+                  <img :src="field.value" alt="Stamp" />
+                </div>
+                <span v-else-if="field.type === 'CHECKBOX'" class="field-value" :style="fieldValueStyle(field)">
+                  {{ isCheckedValue(field.value) ? 'X' : '' }}
+                </span>
+                <span v-else-if="field.value && field.value.trim()" class="field-value" :style="fieldValueStyle(field)">
+                  {{ field.value }}
+                </span>
+                <span v-else class="field-placeholder" :style="fieldPlaceholderStyle(field)">
+                  {{ field.label || field.type.replace('_', ' ') }}
+                </span>
                 <button
                   v-if="placements[field.id]"
                   class="field-clear"
@@ -112,7 +127,10 @@
               :key="field.type"
               class="palette-item"
               type="button"
+              draggable="true"
               @click="handlePaletteClick(field.type)"
+              @dragstart="startPaletteDrag($event, field.type)"
+              @dragend="endPaletteDrag"
             >
               <svg class="palette-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -124,7 +142,7 @@
               <span class="palette-label">{{ field.label }}</span>
             </button>
           </div>
-          <p class="helper">Fields are already placed in the document.</p>
+          <p class="helper">Drag a field onto the document to place it.</p>
         </div>
       </aside>
     </section>
@@ -225,6 +243,62 @@
         <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
       </div>
     </div>
+    <div v-if="fieldModalOpen" class="signature-modal">
+      <div class="signature-backdrop" @click="closeFieldModal"></div>
+      <div class="signature-dialog" role="dialog" aria-modal="true" aria-label="Field input">
+        <header class="signature-header">
+          <div>
+            <p class="eyebrow">Field</p>
+            <h3>{{ activeFieldLabel }}</h3>
+          </div>
+          <button class="icon-btn" type="button" @click="closeFieldModal">x</button>
+        </header>
+
+        <div class="field-form">
+          <template v-if="activeFieldType === 'CHECKBOX'">
+            <label class="check-row">
+              <input v-model="fieldDraftChecked" type="checkbox" />
+              Mark as checked
+            </label>
+          </template>
+          <template v-else-if="activeFieldType === 'DROPDOWN' || activeFieldType === 'RADIO'">
+            <select v-model="fieldDraftValue" class="type-input">
+              <option v-for="choice in activeFieldChoices" :key="choice" :value="choice">
+                {{ choice }}
+              </option>
+            </select>
+            <p v-if="activeFieldChoices.length === 0" class="helper">
+              No choices provided for this field.
+            </p>
+          </template>
+          <template v-else-if="activeFieldType === 'DATE'">
+            <input v-model="fieldDraftValue" class="type-input" type="date" />
+          </template>
+          <template v-else-if="activeFieldType === 'IMAGE' || activeFieldType === 'ATTACHMENT'">
+            <label class="upload-btn">
+              <input
+                type="file"
+                :accept="activeFieldType === 'IMAGE' ? 'image/*' : undefined"
+                @change="handleFieldUpload"
+              />
+              Upload file
+            </label>
+            <div v-if="fieldDraftFileData && activeFieldType === 'IMAGE'" class="upload-preview">
+              <img :src="fieldDraftFileData" alt="Uploaded image" />
+            </div>
+            <p v-else-if="fieldDraftFileName" class="helper">{{ fieldDraftFileName }}</p>
+          </template>
+          <template v-else>
+            <input v-model.trim="fieldDraftValue" class="type-input" type="text" placeholder="Enter value" />
+          </template>
+        </div>
+
+        <div class="signature-actions">
+          <button class="btn btn-outline" type="button" @click="clearFieldValue">Clear value</button>
+          <button class="btn btn-primary" type="button" @click="saveFieldValue">Apply</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -237,6 +311,7 @@ import { createId } from '@/shared/lib/ids';
 import { OptimisticManager } from '@/shared/lib/optimistic';
 import {
   applySignature,
+  createSigningField,
   createSigningSession,
   submitManifest,
   uploadSignature,
@@ -318,6 +393,15 @@ let activeStroke: Array<{ x: number; y: number }> | null = null;
 const placements = ref<Record<string, SignaturePlacement>>({});
 const draggingSignature = ref<SignaturePayload | null>(null);
 const signatureModalOpen = ref(false);
+const draggingFieldType = ref<SigningSessionView['fields'][number]['type'] | null>(null);
+const pendingPlacementFieldId = ref<string | null>(null);
+const pendingFieldIds = ref<Set<string>>(new Set());
+const fieldModalOpen = ref(false);
+const activeFieldId = ref<string | null>(null);
+const fieldDraftValue = ref('');
+const fieldDraftChecked = ref(false);
+const fieldDraftFileName = ref('');
+const fieldDraftFileData = ref('');
 
 const fieldPalette = [
   { type: 'SIGNATURE', label: 'Signature' },
@@ -360,8 +444,11 @@ const placementStorageKey = computed(() =>
   token.value ? `esigning:signature-placements:${token.value}` : '',
 );
 
-const isSignatureField = (field: SigningSessionView['fields'][number]) =>
-  field.type === 'SIGNATURE' || field.type === 'INITIAL';
+const normalizeFieldType = (value: unknown) => String(value ?? '').toUpperCase();
+const isSignatureField = (field: SigningSessionView['fields'][number]) => {
+  const type = normalizeFieldType(field?.type);
+  return type === 'SIGNATURE' || type === 'INITIAL';
+};
 const isSignatureDataUrl = (value: string) => value.startsWith('data:image');
 
 const getSignatureMeta = (field: SigningSessionView['fields'][number]) => {
@@ -376,6 +463,17 @@ const missingSignatureCount = computed(
   () => signatureFields.value.filter((field) => !placements.value[field.id]).length,
 );
 const placementCount = computed(() => Object.keys(placements.value).length);
+const activeField = computed(() => fields.value.find((field) => field.id === activeFieldId.value));
+const activeFieldType = computed(() => {
+  if (!activeField.value) return null;
+  return normalizeFieldType(activeField.value.type) as SigningSessionView['fields'][number]['type'];
+});
+const activeFieldLabel = computed(() => {
+  const field = activeField.value;
+  if (!field) return 'Field';
+  return field.label || field.type.replace('_', ' ');
+});
+const activeFieldChoices = computed(() => (activeField.value ? getFieldChoices(activeField.value) : []));
 
 const activeSignature = computed<SignaturePayload | null>(() => {
   if (signatureMode.value === 'draw') {
@@ -397,6 +495,7 @@ const activeSignature = computed<SignaturePayload | null>(() => {
 });
 
 const openSignatureModal = async () => {
+  fieldModalOpen.value = false;
   signatureModalOpen.value = true;
   await nextTick();
   if (signatureMode.value === 'draw') {
@@ -406,12 +505,47 @@ const openSignatureModal = async () => {
 
 const closeSignatureModal = () => {
   signatureModalOpen.value = false;
+  if (!activeSignature.value) {
+    pendingPlacementFieldId.value = null;
+  }
 };
 
 const handlePaletteClick = (type: SigningSessionView['fields'][number]['type']) => {
+  errorMessage.value = '';
   if (type === 'SIGNATURE' || type === 'INITIAL') {
     void openSignatureModal();
+    return;
   }
+  const target = fields.value.find(
+    (field) => field.type === type && !isSignatureField(field) && !isFieldFilled(field),
+  );
+  const fallback = fields.value.find((field) => field.type === type && !isSignatureField(field));
+  if (!target && !fallback) {
+    errorMessage.value = `No ${type.replace('_', ' ').toLowerCase()} field assigned to you.`;
+    return;
+  }
+  openFieldModal(target ?? fallback!);
+};
+
+const startPaletteDrag = (event: DragEvent, type: SigningSessionView['fields'][number]['type']) => {
+  draggingFieldType.value = type;
+  if (type === 'SIGNATURE' || type === 'INITIAL') {
+    draggingSignature.value = activeSignature.value;
+  }
+  event.dataTransfer?.setData('text/plain', `field:${type}`);
+};
+
+const endPaletteDrag = () => {
+  draggingFieldType.value = null;
+  draggingSignature.value = null;
+};
+
+const parseDraggedType = (event: DragEvent) => {
+  const raw = event.dataTransfer?.getData('text/plain') ?? '';
+  if (!raw.startsWith('field:')) return null;
+  const type = raw.slice('field:'.length).trim().toUpperCase();
+  const exists = fieldPalette.some((entry) => entry.type === type);
+  return exists ? (type as SigningSessionView['fields'][number]['type']) : null;
 };
 
 const getFieldChoices = (field: SigningSessionView['fields'][number]) => {
@@ -588,6 +722,25 @@ const parseNormalizedRect = (value: unknown) => {
   return rect;
 };
 
+const getDefaultFieldSize = (type: SigningSessionView['fields'][number]['type']) => {
+  switch (type) {
+    case 'SIGNATURE':
+      return { width: 160, height: 50 };
+    case 'INITIAL':
+      return { width: 90, height: 40 };
+    case 'CHECKBOX':
+      return { width: 22, height: 22 };
+    case 'DATE':
+      return { width: 90, height: 26 };
+    case 'IMAGE':
+      return { width: 140, height: 90 };
+    case 'ATTACHMENT':
+      return { width: 120, height: 32 };
+    default:
+      return { width: 140, height: 32 };
+  }
+};
+
 const computeNormalizedRect = (
   field: SigningSessionView['fields'][number],
   size: { width: number; height: number },
@@ -624,9 +777,20 @@ const fieldStyle = (field: SigningSessionView['fields'][number], page: number) =
   };
 };
 
+const isCheckedValue = (value?: string | null) => {
+  const normalized = (value ?? '').toLowerCase();
+  return ['true', '1', 'checked', 'yes', 'on'].includes(normalized);
+};
+
+const isFieldFilled = (field: SigningSessionView['fields'][number]) => {
+  if (isSignatureField(field)) return Boolean(placements.value[field.id]);
+  if (field.type === 'CHECKBOX') return isCheckedValue(field.value);
+  return Boolean(field.value && field.value.trim());
+};
+
 const fieldClass = (field: SigningSessionView['fields'][number]) => [
   isSignatureField(field) ? 'signature' : 'info',
-  placements.value[field.id] ? 'filled' : '',
+  isFieldFilled(field) ? 'filled' : '',
 ];
 
 const fieldLabel = (field: SigningSessionView['fields'][number]) => field.label || field.type.replace('_', ' ');
@@ -636,6 +800,21 @@ const signatureTextStyle = (field: SigningSessionView['fields'][number]) => {
   return {
     fontSize: `${Math.min(18, field.height) * scale.value}px`,
     fontFamily: placementFont ?? metaFont ?? signatureFont,
+    color: getSignatureInkColor(),
+  };
+};
+const fieldValueStyle = (field: SigningSessionView['fields'][number]) => {
+  const fontSize = Math.min(16, field.height) * scale.value;
+  return {
+    fontSize: `${Math.max(10, fontSize)}px`,
+    color: getSignatureInkColor(),
+  };
+};
+const fieldPlaceholderStyle = (field: SigningSessionView['fields'][number]) => {
+  const fontSize = Math.min(14, field.height) * scale.value;
+  return {
+    fontSize: `${Math.max(10, fontSize)}px`,
+    color: getSignatureInkColor(),
   };
 };
 
@@ -683,12 +862,15 @@ const placeSignature = (field: SigningSessionView['fields'][number], signature?:
 };
 
 const handleFieldClick = (field: SigningSessionView['fields'][number]) => {
-  if (!isSignatureField(field)) return;
-  if (!activeSignature.value) {
-    void openSignatureModal();
+  if (isSignatureField(field)) {
+    if (!activeSignature.value) {
+      void openSignatureModal();
+      return;
+    }
+    placeSignature(field);
     return;
   }
-  placeSignature(field);
+  openFieldModal(field);
 };
 
 const clearPlacement = (fieldId: string) => {
@@ -752,9 +934,79 @@ const seedPlacementsFromFields = () => {
   placements.value = next;
 };
 
-const handleDrop = (event: DragEvent, page: number) => {
-  const signature = draggingSignature.value ?? activeSignature.value;
-  if (!signature) return;
+const createFieldAtPosition = async (
+  type: SigningSessionView['fields'][number]['type'],
+  clientX: number,
+  clientY: number,
+  page: number,
+) => {
+  if (!doc.value || !token.value) return null;
+  const pageEl = pageRefs.get(page);
+  const size = pageSizes.value[page];
+  if (!pageEl || !size) return null;
+  const rect = pageEl.getBoundingClientRect();
+  const x = Math.max(0, clientX - rect.left);
+  const y = Math.max(0, clientY - rect.top);
+  const defaults = getDefaultFieldSize(type);
+  const pdfX = x / scale.value;
+  const pdfY = size.height - y / scale.value - defaults.height;
+  const normalized = computeNormalizedRect(
+    {
+      x: pdfX,
+      y: Math.max(0, pdfY),
+      width: defaults.width,
+      height: defaults.height,
+    } as SigningSessionView['fields'][number],
+    size,
+  );
+  const payload = {
+    type,
+    page,
+    x: pdfX,
+    y: Math.max(0, pdfY),
+    width: defaults.width,
+    height: defaults.height,
+    required: true,
+    options: { normalized },
+  };
+  const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  pendingFieldIds.value = new Set(pendingFieldIds.value).add(tempId);
+  const optimisticField = {
+    id: tempId,
+    label: null,
+    required: true,
+    value: null,
+    options: payload.options,
+    page: payload.page,
+    type: payload.type,
+    x: payload.x,
+    y: payload.y,
+    width: payload.width,
+    height: payload.height,
+  } as SigningSessionView['fields'][number];
+  fields.value = [...fields.value, optimisticField];
+  try {
+    const created = await createSigningField({
+      docId: doc.value.id,
+      signingToken: token.value,
+      payload,
+    });
+    fields.value = fields.value.map((field) => (field.id === tempId ? { ...field, ...created } : field));
+    const nextPending = new Set(pendingFieldIds.value);
+    nextPending.delete(tempId);
+    pendingFieldIds.value = nextPending;
+    return created;
+  } catch (err) {
+    fields.value = fields.value.filter((field) => field.id !== tempId);
+    const nextPending = new Set(pendingFieldIds.value);
+    nextPending.delete(tempId);
+    pendingFieldIds.value = nextPending;
+    errorMessage.value = err instanceof Error ? err.message : 'Unable to add a field.';
+    return null;
+  }
+};
+
+const handleDrop = async (event: DragEvent, page: number) => {
   const pageEl = pageRefs.get(page);
   const size = pageSizes.value[page];
   if (!pageEl || !size) return;
@@ -767,17 +1019,58 @@ const handleDrop = (event: DragEvent, page: number) => {
     x: localX / viewportWidth,
     y: localY / viewportHeight,
   };
+  const draggedType = parseDraggedType(event) ?? draggingFieldType.value;
+  if (draggedType) {
+    const target = fieldsByPage(page).find(
+      (field) => field.type === draggedType && pointInRect(point, resolveNormalizedRect(field, size)),
+    );
+    if (target) {
+      if (isSignatureField(target)) {
+        const signature = draggingSignature.value ?? activeSignature.value;
+        if (signature) {
+          placeSignature(target, signature);
+        } else {
+          pendingPlacementFieldId.value = target.id;
+          void openSignatureModal();
+        }
+      }
+    } else {
+      const created = await createFieldAtPosition(draggedType, event.clientX, event.clientY, page);
+      if (created) {
+        if (isSignatureField(created)) {
+          const signature = draggingSignature.value ?? activeSignature.value;
+          if (signature) {
+            placeSignature(created, signature);
+          } else {
+            pendingPlacementFieldId.value = created.id;
+            void openSignatureModal();
+          }
+        }
+      }
+    }
+    draggingFieldType.value = null;
+    draggingSignature.value = null;
+    return;
+  }
+  const signature = draggingSignature.value ?? activeSignature.value;
+  if (!signature) return;
   const target = fieldsByPage(page).find(
     (field) => isSignatureField(field) && pointInRect(point, resolveNormalizedRect(field, size)),
   );
   if (target) {
     placeSignature(target, signature);
+  } else {
+    const created = await createFieldAtPosition('SIGNATURE', event.clientX, event.clientY, page);
+    if (created) {
+      placeSignature(created, signature);
+    }
   }
   draggingSignature.value = null;
 };
 
 const startSignatureDrag = (event: DragEvent) => {
   if (!activeSignature.value) return;
+  draggingFieldType.value = null;
   draggingSignature.value = activeSignature.value;
   event.dataTransfer?.setData('text/plain', 'signature');
 };
@@ -808,9 +1101,104 @@ const loadSession = async () => {
   }
 };
 
+const openFieldModal = (field: SigningSessionView['fields'][number]) => {
+  if (isSignatureField(field)) {
+    if (activeSignature.value) {
+      placeSignature(field);
+    } else {
+      pendingPlacementFieldId.value = field.id;
+      void openSignatureModal();
+    }
+    return;
+  }
+  signatureModalOpen.value = false;
+  errorMessage.value = '';
+  activeFieldId.value = field.id;
+  fieldDraftValue.value = field.value ?? '';
+  fieldDraftChecked.value = isCheckedValue(field.value);
+  fieldDraftFileName.value = '';
+  if (field.type === 'IMAGE') {
+    fieldDraftFileData.value = field.value?.startsWith('data:') ? field.value : '';
+  } else if (field.type === 'ATTACHMENT') {
+    fieldDraftFileName.value = field.value ?? '';
+    fieldDraftFileData.value = '';
+  } else {
+    fieldDraftFileData.value = '';
+  }
+  if (field.type === 'DROPDOWN' || field.type === 'RADIO') {
+    const choices = getFieldChoices(field);
+    fieldDraftValue.value =
+      (field.value && choices.includes(field.value) ? field.value : choices[0]) ?? '';
+  }
+  fieldModalOpen.value = true;
+};
+
+const closeFieldModal = () => {
+  fieldModalOpen.value = false;
+  activeFieldId.value = null;
+  fieldDraftValue.value = '';
+  fieldDraftChecked.value = false;
+  fieldDraftFileName.value = '';
+  fieldDraftFileData.value = '';
+};
+
+const updateFieldValue = (fieldId: string, value: string | null) => {
+  fields.value = fields.value.map((field) => (field.id === fieldId ? { ...field, value } : field));
+};
+
+const saveFieldValue = () => {
+  const field = activeField.value;
+  if (!field) return;
+  let nextValue: string | null = fieldDraftValue.value.trim();
+  if (field.type === 'CHECKBOX') {
+    nextValue = fieldDraftChecked.value ? 'checked' : 'unchecked';
+  } else if (field.type === 'IMAGE') {
+    nextValue = fieldDraftFileData.value || null;
+  } else if (field.type === 'ATTACHMENT') {
+    nextValue = fieldDraftFileName.value || null;
+  } else if (field.type === 'DROPDOWN' || field.type === 'RADIO') {
+    nextValue = fieldDraftValue.value || null;
+  } else if (!nextValue) {
+    nextValue = null;
+  }
+  updateFieldValue(field.id, nextValue);
+  closeFieldModal();
+};
+
+const clearFieldValue = () => {
+  const field = activeField.value;
+  if (!field) return;
+  const nextValue = field.type === 'CHECKBOX' ? 'unchecked' : null;
+  updateFieldValue(field.id, nextValue);
+  closeFieldModal();
+};
+
+const handleFieldUpload = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  fieldDraftFileName.value = file.name;
+  if (activeFieldType.value === 'ATTACHMENT') {
+    input.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (typeof reader.result === 'string') {
+      fieldDraftFileData.value = reader.result;
+    }
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+};
+
 const signDocument = async () => {
   if (!doc.value || !sessionView.value || !canSign.value) return;
   errorMessage.value = '';
+  if (pendingFieldIds.value.size > 0) {
+    errorMessage.value = 'Please wait for fields to finish placing before signing.';
+    return;
+  }
 
   const optimistic = optimisticManager.begin(doc.value, {
     description: 'signature-applied',
@@ -823,7 +1211,7 @@ const signDocument = async () => {
     const correlationId = optimistic.mutation.correlationId;
     const session = await createSigningSession(doc.value.id, token.value, clientMutationId, correlationId);
 
-    const fieldsPayload = sessionView.value.fields.map((field) => {
+    const fieldsPayload = fields.value.map((field) => {
       if (isSignatureField(field)) {
         const placement = placements.value[field.id];
         return { fieldId: field.id, value: resolveSignatureValue(field, placement) };
@@ -871,8 +1259,30 @@ const signDocument = async () => {
   }
 };
 
-const getInkColor = () =>
-  getComputedStyle(document.documentElement).getPropertyValue('--ink-strong').trim() || '#0f172a';
+const isWhiteColor = (value: string) => {
+  const normalized = value.replace(/\s/g, '').toLowerCase();
+  if (!normalized) return false;
+  if (normalized === '#fff' || normalized === '#ffffff' || normalized === 'white') return true;
+  const match = normalized.match(/^rgba?\((\d+),(\d+),(\d+)(?:,([0-9.]+))?\)$/);
+  if (!match) return false;
+  const r = Number(match[1]);
+  const g = Number(match[2]);
+  const b = Number(match[3]);
+  const alpha = match[4] ? Number(match[4]) : 1;
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return false;
+  if (alpha === 0) return false;
+  return r >= 245 && g >= 245 && b >= 245;
+};
+
+const getSignatureInkColor = () => {
+  const canvas = signatureCanvas.value;
+  const canvasBg = canvas ? getComputedStyle(canvas).backgroundColor : '';
+  if (isWhiteColor(canvasBg)) return '#000000';
+  const firstPage = pageRefs.get(1);
+  const pageBg = firstPage ? getComputedStyle(firstPage).backgroundColor : '';
+  if (isWhiteColor(pageBg)) return '#000000';
+  return getComputedStyle(document.documentElement).getPropertyValue('--ink-strong').trim() || '#0f172a';
+};
 
 const renderSignatureStrokes = () => {
   if (!signatureCanvas.value || !drawContext) return;
@@ -907,7 +1317,7 @@ const resizeCanvas = () => {
   drawContext.lineWidth = 2.2;
   drawContext.lineCap = 'round';
   drawContext.lineJoin = 'round';
-  drawContext.strokeStyle = getInkColor();
+  drawContext.strokeStyle = getSignatureInkColor();
   renderSignatureStrokes();
 };
 
@@ -952,7 +1362,7 @@ const buildSignatureVector = () => {
 const startDraw = (event: PointerEvent) => {
   if (signatureMode.value !== 'draw' || !signatureCanvas.value || !drawContext) return;
   isDrawing.value = true;
-  drawContext.strokeStyle = getInkColor();
+  drawContext.strokeStyle = getSignatureInkColor();
   signatureCanvas.value.setPointerCapture(event.pointerId);
   const rect = signatureCanvas.value.getBoundingClientRect();
   const x = event.clientX - rect.left;
@@ -1165,15 +1575,14 @@ watch(signatureMode, () => {
 });
 
 watch(activeSignature, (next) => {
-  if (!next || placementCount.value === 0) return;
-  const fieldMap = new Map(fields.value.map((field) => [field.id, field]));
-  const updated: Record<string, SignaturePlacement> = {};
-  Object.entries(placements.value).forEach(([key, placement]) => {
-    const field = fieldMap.get(key);
-    const normalizedSignature = field ? normalizeSignatureForField(field, next) : next;
-    updated[key] = { ...placement, signature: { ...normalizedSignature } };
-  });
-  placements.value = updated;
+  if (!next || !pendingPlacementFieldId.value) return;
+  const field = fields.value.find((item) => item.id === pendingPlacementFieldId.value);
+  if (!field) {
+    pendingPlacementFieldId.value = null;
+    return;
+  }
+  placeSignature(field, next);
+  pendingPlacementFieldId.value = null;
 });
 
 watch(placements, () => persistPlacements(), { deep: true });
@@ -1593,6 +2002,30 @@ onBeforeUnmount(() => {
   font-family: Helvetica, Arial, sans-serif;
   font-size: 1rem;
   font-weight: 700;
+  color: var(--ink-strong);
+}
+
+.field-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.field-placeholder {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.field-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
   color: var(--ink-strong);
 }
 

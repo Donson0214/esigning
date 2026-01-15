@@ -7,7 +7,21 @@ declare module '*.vue' {
 }
 
 declare module 'vue' {
-  export { computed, createApp, onBeforeUnmount, onMounted, ref } from '@vue/runtime-dom';
+  export {
+    computed,
+    createApp,
+    isProxy,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    reactive,
+    ref,
+    shallowRef,
+    toRaw,
+    watch,
+  } from '@vue/runtime-dom';
+
+  export type { DefineComponent } from '@vue/runtime-dom';
 }
 
 declare module '@vue/runtime-core' {

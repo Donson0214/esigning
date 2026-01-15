@@ -240,7 +240,7 @@
             @click="signNowAndSend"
             :disabled="!canSend || savingDraft || signingNow"
           >
-            {{ signingNow ? 'Signing...' : 'Send' }}
+            {{ signingNow ? 'Signing...' : 'Sign now & send' }}
           </button>
           <button
             v-if="signingIntent === 'self'"

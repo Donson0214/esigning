@@ -20,3 +20,4 @@ routes.use('/documents', documentRoutes);
 routes.use('/notifications', notificationRoutes);
 routes.use('/docs', signingIntegrityRoutes);
 routes.use('/sign', signingRoutes);
+routes.use('/signing', signingRoutes);
