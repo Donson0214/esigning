@@ -6,6 +6,8 @@ function getParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+const sanitizeFileName = (value: string) => value.replace(/["\\\r\n]/g, '_');
+
 export async function viewSigningSession(req: Request, res: Response, next: NextFunction) {
   try {
     const token = getParam(req.params.token);
@@ -18,6 +20,23 @@ export async function viewSigningSession(req: Request, res: Response, next: Next
       correlationId: req.correlationId,
     });
     res.json(session);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getSigningFile(req: Request, res: Response, next: NextFunction) {
+  try {
+    const token = getParam(req.params.token);
+    if (!token) {
+      return res.status(400).json({ error: 'TOKEN_REQUIRED' });
+    }
+    const file = await signingService.getSigningFile(token);
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${sanitizeFileName(file.fileName)}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('Content-Length', file.buffer.length.toString());
+    res.send(file.buffer);
   } catch (err) {
     next(err);
   }

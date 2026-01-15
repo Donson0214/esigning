@@ -11,7 +11,7 @@ import { createEvent } from '../../shared/events';
 import { emitEvent } from '../../realtime/socket';
 import { env } from '../../config/env';
 import { dispatchNotification } from '../notifications/notification.service';
-import { createSignedUrl } from '../../utils/supabase.util';
+import { createSignedUrl, downloadStoredFile } from '../../utils/supabase.util';
 import {
   applySignature as applySignatureFlow,
   completeDocument as completeDocumentFlow,
@@ -169,6 +169,24 @@ export async function viewSigningSession(token: string, meta: RequestMeta) {
       status: signer.document.status,
     },
     fields: signer.fields,
+  };
+}
+
+export async function getSigningFile(token: string) {
+  const signer = await getSignerByToken(token);
+  const filePath =
+    signer.document.signedFileUrl ||
+    signer.document.signedFilePublicId ||
+    signer.document.fileUrl ||
+    signer.document.filePublicId;
+  if (!filePath) {
+    throw createHttpError(404, 'FILE_UNAVAILABLE', 'File path missing');
+  }
+  const buffer = await downloadStoredFile(filePath);
+  return {
+    buffer,
+    fileName: signer.document.fileName || 'document.pdf',
+    contentType: signer.document.fileMimeType || 'application/pdf',
   };
 }
 

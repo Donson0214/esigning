@@ -1,28 +1,41 @@
 <template>
-  <div class="sign-page">
-    <section class="page-header">
-      <h2>Sign Document</h2>
-      <p v-if="doc">{{ doc.title }}</p>
-      <p v-else class="muted">Loading document...</p>
-    </section>
+  <div class="sign-page sign-document">
+    <header class="builder-topbar">
+      <div class="left-actions">
+        <button class="btn btn-outline" type="button" @click="goBack">Back</button>
+        <div class="doc-meta">
+          <p class="doc-title">{{ doc?.title ?? 'Sign Document' }}</p>
+          <p class="doc-sub">{{ signer?.email ?? 'Loading signer...' }}</p>
+        </div>
+      </div>
+      <div class="right-actions">
+        <div class="status-pill" :class="statusClass">
+          {{ doc?.status ?? 'Loading' }}
+        </div>
+        <button class="btn btn-primary" type="button" :disabled="!canSign" @click="signDocument">
+          Sign document
+        </button>
+      </div>
+    </header>
 
-    <section v-if="doc" class="doc-card">
-      <div class="doc-row">
-        <span>Status</span>
-        <strong>{{ doc.status }}</strong>
-      </div>
-      <div class="doc-row">
-        <span>Signer</span>
-        <strong>{{ signer?.email }}</strong>
-      </div>
-      <div class="doc-row">
-        <span>File</span>
-        <a :href="doc.fileUrl" target="_blank" rel="noreferrer">Preview</a>
-      </div>
-    </section>
+    <section v-if="doc" class="builder-body">
+      <aside class="left-panel">
+        <div class="panel-title">Pages</div>
+        <div class="thumb-list">
+          <button
+            v-for="page in pageCount"
+            :key="page"
+            class="thumb-card"
+            type="button"
+            @click="scrollToPage(page)"
+          >
+            <canvas :ref="setThumbRef(page)" class="thumb-canvas"></canvas>
+            <span>Page {{ page }}</span>
+          </button>
+        </div>
+      </aside>
 
-    <section v-if="doc" class="sign-body">
-      <div class="viewer-card">
+      <section class="center-panel">
         <div class="viewer-toolbar">
           <div class="zoom-controls">
             <button class="icon-btn" type="button" @click="zoomOut">-</button>
@@ -81,104 +94,146 @@
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <aside class="signature-panel">
-        <div class="signature-card">
-          <div class="signature-tabs">
+      <aside class="right-panel">
+        <div class="panel-section">
+          <div class="panel-title">Signers</div>
+          <div class="signer-card">
+            <p class="signer-name">{{ signer?.name || 'You' }}</p>
+            <p class="signer-email">{{ signer?.email ?? '' }}</p>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <div class="panel-title">Field palette</div>
+          <div class="palette">
             <button
+              v-for="field in fieldPalette"
+              :key="field.type"
+              class="palette-item"
               type="button"
-              :class="['tab-btn', signatureMode === 'draw' && 'active']"
-              @click="signatureMode = 'draw'"
+              @click="handlePaletteClick(field.type)"
             >
-              Draw Signature
-            </button>
-            <button
-              type="button"
-              :class="['tab-btn', signatureMode === 'type' && 'active']"
-              @click="signatureMode = 'type'"
-            >
-              Type Signature
-            </button>
-            <button
-              type="button"
-              :class="['tab-btn', signatureMode === 'upload' && 'active']"
-              @click="signatureMode = 'upload'"
-            >
-              Upload Image
+              <svg class="palette-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  v-for="(path, index) in paletteIconPaths(field.type)"
+                  :key="index"
+                  :d="path"
+                />
+              </svg>
+              <span class="palette-label">{{ field.label }}</span>
             </button>
           </div>
-
-          <div class="signature-area">
-            <div v-if="signatureMode === 'draw'" class="draw-wrap">
-              <canvas
-                ref="signatureCanvas"
-                class="signature-canvas"
-                @pointerdown="startDraw"
-                @pointermove="draw"
-                @pointerup="endDraw"
-                @pointerleave="endDraw"
-              ></canvas>
-              <span v-if="!hasDrawing" class="signature-placeholder">Draw your signature here</span>
-            </div>
-            <div v-else-if="signatureMode === 'type'" class="type-wrap">
-              <input
-                v-model.trim="typedSignature"
-                class="type-input"
-                type="text"
-                placeholder="Type your full name"
-              />
-              <div :class="['type-preview', !typedSignature && 'empty']" :style="{ fontFamily: signatureFont }">
-                {{ typedSignature || 'Your signature' }}
-              </div>
-            </div>
-            <div v-else class="upload-wrap">
-              <label class="upload-btn">
-                <input type="file" accept="image/*" @change="handleSignatureUpload" />
-                Upload signature image
-              </label>
-              <div v-if="signatureImage" class="upload-preview">
-                <img :src="signatureImage" alt="Uploaded signature" />
-              </div>
-            </div>
-          </div>
-
-          <div class="signature-palette">
-            <div
-              class="signature-chip"
-              :class="!activeSignature && 'disabled'"
-              :draggable="Boolean(activeSignature)"
-              @dragstart="startSignatureDrag"
-              @dragend="endSignatureDrag"
-            >
-              <img v-if="activeSignature?.dataUrl" :src="activeSignature.dataUrl" alt="Signature" />
-              <span v-else>{{ activeSignature?.text || 'Signature' }}</span>
-            </div>
-            <p class="helper">Drag your signature onto a signature field or click a field to place it.</p>
-          </div>
-
-          <div class="signature-actions">
-            <button class="link-btn" type="button" @click="clearSignature">Clear signature</button>
-            <div class="action-buttons">
-              <button class="btn btn-outline" type="button" @click="clearPlacements" :disabled="!placementCount">
-                Clear placements
-              </button>
-              <button class="btn btn-primary" type="button" :disabled="!canSign" @click="signDocument">
-                Sign Document
-              </button>
-            </div>
-          </div>
-          <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+          <p class="helper">Fields are already placed in the document.</p>
         </div>
       </aside>
     </section>
+
+    <section v-else class="loading-state">
+      <p class="muted">Loading document...</p>
+    </section>
+
+    <div v-if="signatureModalOpen" class="signature-modal">
+      <div class="signature-backdrop" @click="closeSignatureModal"></div>
+      <div class="signature-dialog" role="dialog" aria-modal="true" aria-label="Signature options">
+        <header class="signature-header">
+          <div>
+            <p class="eyebrow">Signature</p>
+            <h3>Signature options</h3>
+          </div>
+          <button class="icon-btn" type="button" @click="closeSignatureModal">x</button>
+        </header>
+
+        <div class="signature-tabs">
+          <button
+            type="button"
+            :class="['tab-btn', signatureMode === 'draw' && 'active']"
+            @click="signatureMode = 'draw'"
+          >
+            Draw
+          </button>
+          <button
+            type="button"
+            :class="['tab-btn', signatureMode === 'type' && 'active']"
+            @click="signatureMode = 'type'"
+          >
+            Type
+          </button>
+          <button
+            type="button"
+            :class="['tab-btn', signatureMode === 'upload' && 'active']"
+            @click="signatureMode = 'upload'"
+          >
+            Upload
+          </button>
+        </div>
+
+        <div class="signature-area">
+          <div v-if="signatureMode === 'draw'" class="draw-wrap">
+            <canvas
+              ref="signatureCanvas"
+              class="signature-canvas"
+              @pointerdown="startDraw"
+              @pointermove="draw"
+              @pointerup="endDraw"
+              @pointerleave="endDraw"
+            ></canvas>
+            <span v-if="!hasDrawing" class="signature-placeholder">Draw your signature here</span>
+          </div>
+          <div v-else-if="signatureMode === 'type'" class="type-wrap">
+            <input
+              v-model.trim="typedSignature"
+              class="type-input"
+              type="text"
+              placeholder="Type your full name"
+            />
+            <div :class="['type-preview', !typedSignature && 'empty']" :style="{ fontFamily: signatureFont }">
+              {{ typedSignature || 'Your signature' }}
+            </div>
+          </div>
+          <div v-else class="upload-wrap">
+            <label class="upload-btn">
+              <input type="file" accept="image/*" @change="handleSignatureUpload" />
+              Upload signature image
+            </label>
+            <div v-if="signatureImage" class="upload-preview">
+              <img :src="signatureImage" alt="Uploaded signature" />
+            </div>
+          </div>
+        </div>
+
+        <div class="signature-palette">
+          <div
+            class="signature-chip"
+            :class="!activeSignature && 'disabled'"
+            :draggable="Boolean(activeSignature)"
+            @dragstart="startSignatureDrag"
+            @dragend="endSignatureDrag"
+          >
+            <img v-if="activeSignature?.dataUrl" :src="activeSignature.dataUrl" alt="Signature" />
+            <span v-else>{{ activeSignature?.text || 'Signature' }}</span>
+          </div>
+          <p class="helper">Drag your signature onto a signature field or click a field to place it.</p>
+        </div>
+
+        <div class="signature-actions">
+          <button class="link-btn" type="button" @click="clearSignature">Clear signature</button>
+          <button class="btn btn-outline" type="button" @click="clearPlacements" :disabled="!placementCount">
+            Clear placements
+          </button>
+        </div>
+        <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
+import { apiClient } from '@/shared/lib/axios';
 import { createId } from '@/shared/lib/ids';
 import { OptimisticManager } from '@/shared/lib/optimistic';
 import {
@@ -226,12 +281,15 @@ type SignaturePlacement = {
 const signatureFont = 'Helvetica, Arial, sans-serif';
 
 const route = useRoute();
+const router = useRouter();
 const token = computed(() => String(route.params.token ?? ''));
 const sessionView = ref<SigningSessionView | null>(null);
 const doc = ref<SignDocState | null>(null);
 const signer = ref<SigningSessionView['signer'] | null>(null);
 const fields = ref<SigningSessionView['fields']>([]);
 const errorMessage = ref('');
+
+const goBack = () => router.push('/app/documents');
 
 const pdfDoc = ref<PDFDocumentProxy | null>(null);
 const scale = ref(1);
@@ -240,9 +298,11 @@ const pageSizes = ref<Record<number, { width: number; height: number }>>({});
 const viewerRef = ref<HTMLDivElement | null>(null);
 const pageRefs = new Map<number, HTMLDivElement>();
 const canvasRefs = new Map<number, HTMLCanvasElement>();
+const thumbRefs = new Map<number, HTMLCanvasElement>();
 const pdfError = ref('');
 const pdfLoadToken = ref(0);
 let renderAllPagesQueue: Promise<void> = Promise.resolve();
+let renderThumbsQueue: Promise<void> = Promise.resolve();
 
 const signatureMode = ref<'draw' | 'type' | 'upload'>('draw');
 const typedSignature = ref('');
@@ -258,6 +318,42 @@ let activeStroke: Array<{ x: number; y: number }> | null = null;
 
 const placements = ref<Record<string, SignaturePlacement>>({});
 const draggingSignature = ref<SignaturePayload | null>(null);
+const signatureModalOpen = ref(false);
+
+const fieldPalette = [
+  { type: 'SIGNATURE', label: 'Signature' },
+  { type: 'INITIAL', label: 'Initial' },
+  { type: 'FULL_NAME', label: 'Full Name' },
+  { type: 'EMAIL', label: 'Email' },
+  { type: 'DATE', label: 'Date' },
+  { type: 'TEXT', label: 'Text' },
+  { type: 'CHECKBOX', label: 'Checkbox' },
+  { type: 'DROPDOWN', label: 'Dropdown' },
+  { type: 'RADIO', label: 'Radio' },
+  { type: 'COMPANY', label: 'Company' },
+  { type: 'JOB_TITLE', label: 'Job Title' },
+  { type: 'IMAGE', label: 'Stamp (Image)' },
+  { type: 'ATTACHMENT', label: 'Attachment' },
+] as const;
+
+const fieldIconMap: Record<SigningSessionView['fields'][number]['type'], string[]> = {
+  SIGNATURE: ['M3 21h4l11-11-4-4-11 11v4Z', 'M14 6l4 4'],
+  INITIAL: ['M3 21h4l11-11-4-4-11 11v4Z', 'M14 6l4 4'],
+  FULL_NAME: ['M12 12a4 4 0 1 0 0.001-8.001A4 4 0 0 0 12 12Z', 'M4 20a8 8 0 0 1 16 0'],
+  EMAIL: ['M4 6h16v12H4z', 'M4 7l8 6 8-6'],
+  DATE: ['M6 4v4', 'M18 4v4', 'M4 10h16', 'M5 6h14v14H5z'],
+  TEXT: ['M4 6h16', 'M4 12h16', 'M4 18h10'],
+  CHECKBOX: ['M4 4h16v16H4z', 'M7 12l3 3 7-7'],
+  DROPDOWN: ['M4 7h16', 'M8 12l4 4 4-4'],
+  RADIO: ['M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0', 'M12 12m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0'],
+  COMPANY: ['M4 20h16', 'M6 20V8h12v12', 'M9 12h2', 'M9 16h2', 'M13 12h2', 'M13 16h2'],
+  JOB_TITLE: ['M8 7V5h8v2', 'M4 7h16v11H4z', 'M4 11h16'],
+  IMAGE: ['M4 5h16v14H4z', 'M8 9a2 2 0 1 0 0.001-4.001A2 2 0 0 0 8 9Z', 'M4 17l4-4 3 3 4-4 5 5'],
+  ATTACHMENT: ['M7 13l6-6a3 3 0 1 1 4 4l-7 7a5 5 0 0 1-7-7l7-7'],
+};
+
+const paletteIconPaths = (type: SigningSessionView['fields'][number]['type']) =>
+  fieldIconMap[type] ?? ['M4 12h16'];
 
 const optimisticManager = new OptimisticManager<SignDocState>();
 
@@ -300,6 +396,24 @@ const activeSignature = computed<SignaturePayload | null>(() => {
   if (!text) return null;
   return { type: 'TYPED', text, font: signatureFont };
 });
+
+const openSignatureModal = async () => {
+  signatureModalOpen.value = true;
+  await nextTick();
+  if (signatureMode.value === 'draw') {
+    resizeCanvas();
+  }
+};
+
+const closeSignatureModal = () => {
+  signatureModalOpen.value = false;
+};
+
+const handlePaletteClick = (type: SigningSessionView['fields'][number]['type']) => {
+  if (type === 'SIGNATURE' || type === 'INITIAL') {
+    void openSignatureModal();
+  }
+};
 
 const getFieldChoices = (field: SigningSessionView['fields'][number]) => {
   if (!field.options || typeof field.options !== 'object') return [];
@@ -442,6 +556,15 @@ const canSign = computed(() => {
   return missingSignatureCount.value === 0;
 });
 
+const statusClass = computed(() => {
+  const status = doc.value?.status;
+  if (!status) return 'neutral';
+  if (status === 'COMPLETED') return 'success';
+  if (status === 'SIGNED' || status === 'IN_PROGRESS' || status === 'SENT') return 'warning';
+  if (status === 'DECLINED' || status === 'EXPIRED') return 'danger';
+  return 'neutral';
+});
+
 const fieldsByPage = (page: number) => fields.value.filter((field) => field.page === page);
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
@@ -523,6 +646,16 @@ const setPageRef = (page: number) => (el: HTMLDivElement | null) => {
 
 const setCanvasRef = (page: number) => (el: HTMLCanvasElement | null) => {
   if (el) canvasRefs.set(page, el);
+};
+
+const setThumbRef = (page: number) => (el: HTMLCanvasElement | null) => {
+  if (el) thumbRefs.set(page, el);
+};
+
+const scrollToPage = (page: number) => {
+  const target = pageRefs.get(page);
+  if (!target || !viewerRef.value) return;
+  viewerRef.value.scrollTo({ top: target.offsetTop - 12, behavior: 'smooth' });
 };
 
 const pointInRect = (point: { x: number; y: number }, rect: NormalizedRect) =>
@@ -887,25 +1020,46 @@ const loadPdf = async () => {
   pdfLoadToken.value = tokenId;
   pdfError.value = '';
   try {
-    if (!doc.value?.fileUrl) return;
+    if (!doc.value) return;
     let pdf: PDFDocumentProxy | null = null;
-    try {
-      const response = await fetch(doc.value.fileUrl);
-      if (!response.ok) {
+
+    const authToken = localStorage.getItem('auth_token');
+    if (authToken) {
+      try {
+        const response = await apiClient.get<ArrayBuffer>(`/documents/${doc.value.id}/file`, {
+          responseType: 'arraybuffer',
+        });
+        if (tokenId !== pdfLoadToken.value) return;
+        pdf = await getDocument({ data: response.data }).promise;
+      } catch {
+        pdf = null;
+      }
+    }
+
+    if (!pdf) {
+      if (!doc.value.fileUrl) {
         throw new Error('Preview unavailable');
       }
-      const data = await response.arrayBuffer();
-      if (tokenId !== pdfLoadToken.value) return;
-      pdf = await getDocument({ data }).promise;
-    } catch {
-      pdf = await getDocument(doc.value.fileUrl).promise;
+      try {
+        const response = await fetch(doc.value.fileUrl);
+        if (!response.ok) {
+          throw new Error('Preview unavailable');
+        }
+        const data = await response.arrayBuffer();
+        if (tokenId !== pdfLoadToken.value) return;
+        pdf = await getDocument({ data }).promise;
+      } catch {
+        pdf = await getDocument(doc.value.fileUrl).promise;
+      }
     }
     if (tokenId !== pdfLoadToken.value) return;
     pdfDoc.value?.destroy();
     pdfDoc.value = pdf;
     pageCount.value = pdf.numPages;
     pageSizes.value = {};
+    await nextTick();
     await enqueueRenderAllPages(tokenId);
+    await enqueueRenderThumbnails(tokenId);
   } catch (err) {
     if (tokenId !== pdfLoadToken.value) return;
     pdfDoc.value?.destroy();
@@ -939,11 +1093,39 @@ const renderAllPages = async (tokenId = pdfLoadToken.value) => {
   }
 };
 
+const renderThumbnails = async (tokenId = pdfLoadToken.value) => {
+  const pdf = pdfDoc.value;
+  if (!pdf) return;
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    if (tokenId !== pdfLoadToken.value) return;
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 0.2 });
+    const canvas = thumbRefs.get(pageNumber);
+    if (!canvas) continue;
+    const outputScale = window.devicePixelRatio || 1;
+    const renderViewport = page.getViewport({ scale: 0.2 * outputScale });
+    canvas.width = renderViewport.width;
+    canvas.height = renderViewport.height;
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
+    const context = canvas.getContext('2d');
+    if (!context) continue;
+    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+  }
+};
+
 const enqueueRenderAllPages = (tokenId = pdfLoadToken.value) => {
   renderAllPagesQueue = renderAllPagesQueue
     .catch(() => undefined)
     .then(() => renderAllPages(tokenId));
   return renderAllPagesQueue;
+};
+
+const enqueueRenderThumbnails = (tokenId = pdfLoadToken.value) => {
+  renderThumbsQueue = renderThumbsQueue
+    .catch(() => undefined)
+    .then(() => renderThumbnails(tokenId));
+  return renderThumbsQueue;
 };
 
 const zoomIn = async () => {
@@ -996,8 +1178,168 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .sign-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sign-page,
+.sign-page * {
+  border-radius: 0;
+}
+
+.builder-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+  padding: 0.9rem 1rem;
+}
+
+.left-actions,
+.right-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.doc-meta {
   display: grid;
-  gap: 1.5rem;
+  gap: 0.1rem;
+}
+
+.doc-title {
+  margin: 0;
+  font-weight: 700;
+  color: var(--ink-strong);
+}
+
+.doc-sub {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.builder-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  gap: 0;
+  min-height: 70vh;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.left-panel,
+.center-panel,
+.right-panel {
+  background: transparent;
+  border: none;
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.left-panel {
+  border-right: 1px solid var(--line);
+}
+
+.center-panel {
+  border-right: 1px solid var(--line);
+}
+
+.panel-title {
+  font-weight: 700;
+  color: var(--ink-strong);
+}
+
+.panel-section {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.thumb-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.thumb-card {
+  border: none;
+  padding: 0;
+  background: transparent;
+  display: grid;
+  gap: 0.4rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.thumb-canvas {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.signer-card {
+  border: 1px solid var(--line);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.signer-name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+
+.signer-email {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.sign-page .btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  min-height: 32px;
+  box-shadow: none;
+}
+
+.sign-page .btn-primary {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.sign-page .btn-primary:hover {
+  transform: none;
+  background: var(--accent-strong);
+}
+
+.sign-page .btn-outline {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.sign-page .btn-outline:hover {
+  border-color: var(--accent);
+}
+
+.sign-page .icon-btn {
+  border: 1px solid var(--line);
+  background: transparent;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.sign-page .icon-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .page-header h2 {
@@ -1065,34 +1407,40 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
+  background: transparent;
 }
 
 .status-pill.warning {
-  background: rgba(245, 158, 11, 0.14);
   color: var(--warning);
 }
 
 .status-pill.success {
-  background: rgba(22, 163, 74, 0.12);
   color: var(--success);
+}
+
+.status-pill.neutral {
+  color: var(--muted);
+}
+
+.status-pill.danger {
+  color: var(--danger);
 }
 
 .viewer {
   overflow: auto;
-  max-height: calc(100vh - 260px);
+  max-height: calc(100vh - 220px);
   padding: 0.5rem;
-  background: var(--surface-2);
-  border-radius: 16px;
+  background: transparent;
+  border: 1px solid var(--line);
 }
 
 .pdf-error {
   display: grid;
   gap: 0.6rem;
   padding: 1rem;
-  border: 1px dashed var(--line);
-  border-radius: 12px;
-  background: var(--surface);
+  border: 1px solid var(--line);
+  background: transparent;
   color: var(--muted);
   margin-bottom: 1rem;
 }
@@ -1107,13 +1455,11 @@ onBeforeUnmount(() => {
   margin-bottom: 1.5rem;
   display: inline-block;
   background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: none;
 }
 
 .pdf-canvas {
   display: block;
-  border-radius: 10px;
 }
 
 .overlay {
@@ -1124,19 +1470,19 @@ onBeforeUnmount(() => {
 
 .field {
   position: absolute;
-  border: 2px dashed var(--accent);
-  border-radius: 6px;
-  background: rgba(51, 92, 255, 0.08);
+  border: 1px dashed var(--accent);
+  background: rgba(51, 92, 255, 0.06);
   pointer-events: auto;
-  padding: 0.2rem 0.3rem;
-  font-size: 0.75rem;
+  padding: 0.15rem 0.25rem;
+  font-size: 0.7rem;
   display: grid;
   align-content: start;
   gap: 0.2rem;
 }
 
 .field.signature {
-  border-color: var(--accent);
+  border-color: var(--accent-strong);
+  background: rgba(51, 92, 255, 0.12);
 }
 
 .field.info {
@@ -1206,8 +1552,7 @@ onBeforeUnmount(() => {
 
 .tab-btn {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
+  background: transparent;
   padding: 0.6rem 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -1216,15 +1561,13 @@ onBeforeUnmount(() => {
 
 .tab-btn.active {
   border-color: var(--accent);
-  background: rgba(79, 70, 229, 0.08);
   color: var(--accent);
 }
 
 .signature-area {
   border: 1px solid var(--line);
-  border-radius: 18px;
   padding: 1rem;
-  background: var(--surface);
+  background: transparent;
   min-height: 220px;
   position: relative;
 }
@@ -1240,8 +1583,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 200px;
   display: block;
-  border-radius: 14px;
-  background: var(--surface-2);
+  background: #ffffff;
   border: 1px solid var(--line);
   touch-action: none;
 }
@@ -1264,17 +1606,15 @@ onBeforeUnmount(() => {
 .type-input {
   width: 100%;
   height: 44px;
-  border-radius: 12px;
   border: 1px solid var(--line);
   padding: 0 1rem;
-  background: var(--surface);
+  background: transparent;
 }
 
 .type-preview {
   height: 120px;
-  border-radius: 14px;
   border: 1px solid var(--line);
-  background: var(--surface-2);
+  background: transparent;
   display: grid;
   place-items: center;
   font-size: 2rem;
@@ -1295,7 +1635,6 @@ onBeforeUnmount(() => {
 
 .upload-btn {
   border: 1px dashed var(--line);
-  border-radius: 12px;
   padding: 0.6rem 0.9rem;
   text-align: center;
   cursor: pointer;
@@ -1308,9 +1647,8 @@ onBeforeUnmount(() => {
 
 .upload-preview {
   border: 1px solid var(--line);
-  border-radius: 14px;
   padding: 0.5rem;
-  background: var(--surface-2);
+  background: transparent;
   display: grid;
   place-items: center;
 }
@@ -1326,14 +1664,13 @@ onBeforeUnmount(() => {
 }
 
 .signature-chip {
-  border: 1px dashed var(--line);
-  border-radius: 12px;
-  padding: 0.6rem;
-  background: var(--surface-2);
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.6rem;
+  background: transparent;
   display: grid;
   place-items: center;
   cursor: grab;
-  min-height: 64px;
+  min-height: 52px;
   color: var(--ink-strong);
 }
 
@@ -1349,15 +1686,9 @@ onBeforeUnmount(() => {
 
 .signature-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-}
-
-.action-buttons {
-  display: flex;
   align-items: center;
   gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .link-btn {
@@ -1366,6 +1697,12 @@ onBeforeUnmount(() => {
   color: var(--muted);
   cursor: pointer;
   font-weight: 600;
+}
+
+.helper {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin: 0;
 }
 
 .error {
@@ -1377,9 +1714,24 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 
-@media (max-width: 1100px) {
-  .sign-body {
+.loading-state {
+  border: 1px solid var(--line);
+  padding: 1rem;
+}
+
+.sign-document,
+.sign-document * {
+  border-radius: 0;
+}
+
+@media (max-width: 1200px) {
+  .builder-body {
     grid-template-columns: 1fr;
+  }
+
+  .left-panel,
+  .right-panel {
+    order: 1;
   }
 }
 
