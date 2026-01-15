@@ -1,3 +1,4 @@
+import { isProxy, toRaw } from 'vue';
 import { createId } from './ids';
 
 export type OptimisticMutation<State> = {
@@ -12,11 +13,23 @@ type PendingMutation<State> = {
   snapshot: State;
 };
 
-const cloneState = <T>(state: T): T => {
-  if (typeof structuredClone === 'function') {
-    return structuredClone(state);
+const normalizeState = <T>(state: T): T => {
+  if (state && typeof state === 'object' && isProxy(state)) {
+    return toRaw(state) as T;
   }
-  return JSON.parse(JSON.stringify(state)) as T;
+  return state;
+};
+
+const cloneState = <T>(state: T): T => {
+  const normalized = normalizeState(state);
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(normalized);
+    } catch {
+      // fall back to JSON clone below
+    }
+  }
+  return JSON.parse(JSON.stringify(normalized)) as T;
 };
 
 export class OptimisticManager<State> {

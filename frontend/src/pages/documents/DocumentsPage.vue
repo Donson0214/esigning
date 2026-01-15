@@ -121,7 +121,7 @@
             <span>{{ formatDate(doc.date) }}</span>
           </div>
           <div class="actions-cell">
-            <button class="action-btn" type="button" @click="viewDocument(doc)" aria-label="View">
+            <button class="action-btn" type="button" @click="openPreview(doc)" aria-label="Preview">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z" />
                 <circle cx="12" cy="12" r="3" />
@@ -148,7 +148,7 @@
                 </svg>
               </button>
               <div v-if="menuOpenId === doc.id" class="row-menu" @click.stop>
-                <button type="button" class="menu-item" @click="viewDocument(doc)">
+                <button type="button" class="menu-item" @click="openDetails(doc)">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6Z" />
                     <circle cx="12" cy="12" r="3" />
@@ -255,6 +255,26 @@
           </div>
         </div>
       </div>
+      <div v-if="previewOpen && previewDoc" class="modal-backdrop" @click.self="closePreview">
+        <div class="modal-card preview-card">
+          <div class="modal-header">
+            <h3>Document preview</h3>
+            <button class="close" type="button" @click="closePreview">Close</button>
+          </div>
+          <div class="preview-body">
+            <iframe v-if="previewUrl" :src="previewUrl" title="Document preview"></iframe>
+            <p v-else class="empty-state">Preview unavailable.</p>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-outline small" type="button" @click="closePreview">
+              Close
+            </button>
+            <button class="btn btn-primary small" type="button" @click="downloadDocument(previewDoc)">
+              Download
+            </button>
+          </div>
+        </div>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -274,6 +294,7 @@ type DocumentItem = {
   recipient: string;
   date: string;
   fileUrl: string;
+  fileName: string;
   signedFileUrl?: string | null;
 };
 
@@ -291,6 +312,7 @@ const documentRows = computed<DocumentItem[]>(() =>
     recipient: doc.signers?.[0]?.email ?? 'Not sent',
     date: doc.updatedAt ?? doc.createdAt ?? new Date().toISOString(),
     fileUrl: doc.fileUrl,
+    fileName: doc.fileName,
     signedFileUrl: doc.signedFileUrl ?? null,
   })),
 );
@@ -315,7 +337,9 @@ const sortOrder = ref<'newest' | 'oldest'>('newest');
 const filtersOpen = ref(false);
 const menuOpenId = ref<string | null>(null);
 const detailsOpen = ref(false);
+const previewOpen = ref(false);
 const selectedDoc = ref<DocumentItem | null>(null);
+const previewDoc = ref<DocumentItem | null>(null);
 const currentPage = ref(1);
 const pageSize = 8;
 
@@ -431,23 +455,73 @@ const toggleMenu = (id: string) => {
   menuOpenId.value = menuOpenId.value === id ? null : id;
 };
 
-const viewDocument = (doc: DocumentItem) => {
+const openDetails = (doc: DocumentItem) => {
   selectedDoc.value = doc;
   detailsOpen.value = true;
+  previewOpen.value = false;
+  previewDoc.value = null;
   menuOpenId.value = null;
 };
 
-const downloadDocument = (doc: DocumentItem) => {
+const getPreferredUrl = (doc: DocumentItem) => doc.signedFileUrl || doc.fileUrl;
+const previewUrl = computed(() => (previewDoc.value ? getPreferredUrl(previewDoc.value) : ''));
+
+const sanitizeFileName = (value: string) =>
+  value.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+
+const getFileExtension = (value: string) => {
+  const match = value.match(/\.([a-zA-Z0-9]+)$/);
+  return match ? match[1].toLowerCase() : 'pdf';
+};
+
+const buildDownloadName = (doc: DocumentItem) => {
+  if (!doc.signedFileUrl && doc.fileName) return doc.fileName;
+  const base = doc.title ? `${doc.title}-signed` : 'document-signed';
+  const safeBase = sanitizeFileName(base) || 'document-signed';
+  const ext = doc.fileName ? getFileExtension(doc.fileName) : 'pdf';
+  return `${safeBase}.${ext}`;
+};
+
+const openPreview = (doc: DocumentItem) => {
+  previewDoc.value = doc;
+  previewOpen.value = true;
+  detailsOpen.value = false;
+  selectedDoc.value = null;
   menuOpenId.value = null;
-  const url = doc.signedFileUrl || doc.fileUrl;
+};
+
+const closePreview = () => {
+  previewOpen.value = false;
+  previewDoc.value = null;
+};
+
+const downloadDocument = async (doc: DocumentItem) => {
+  menuOpenId.value = null;
+  const fileName = buildDownloadName(doc);
+  const url = getPreferredUrl(doc);
   if (!url) return;
-  const link = document.createElement('a');
-  link.href = url;
-  link.target = '_blank';
-  link.rel = 'noreferrer';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Download failed');
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.rel = 'noreferrer';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
 };
 
 const removeDocument = (id: string) => {
@@ -979,6 +1053,28 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow-lg);
   display: grid;
   gap: 1.2rem;
+}
+
+.preview-card {
+  width: min(960px, 92vw);
+  height: min(80vh, 720px);
+  grid-template-rows: auto 1fr auto;
+}
+
+.preview-body {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+  min-height: 60vh;
+  position: relative;
+}
+
+.preview-body iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
 }
 
 .modal-header {

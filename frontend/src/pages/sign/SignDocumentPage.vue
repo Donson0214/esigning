@@ -13,7 +13,7 @@
           {{ doc?.status ?? 'Loading' }}
         </div>
         <button class="btn btn-primary" type="button" :disabled="!canSign" @click="signDocument">
-          Sign document
+          Done
         </button>
       </div>
     </header>
@@ -51,7 +51,6 @@
         <div class="viewer" ref="viewerRef">
           <div v-if="pdfError" class="pdf-error">
             <p>{{ pdfError }}</p>
-            <a v-if="doc.fileUrl" :href="doc.fileUrl" target="_blank" rel="noreferrer">Open PDF in new tab</a>
           </div>
           <div
             v-for="page in pageCount"
@@ -230,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
 import { apiClient } from '@/shared/lib/axios';
@@ -291,7 +290,7 @@ const errorMessage = ref('');
 
 const goBack = () => router.push('/app/documents');
 
-const pdfDoc = ref<PDFDocumentProxy | null>(null);
+const pdfDoc = shallowRef<PDFDocumentProxy | null>(null);
 const scale = ref(1);
 const pageCount = ref(0);
 const pageSizes = ref<Record<number, { width: number; height: number }>>({});
@@ -684,7 +683,11 @@ const placeSignature = (field: SigningSessionView['fields'][number], signature?:
 };
 
 const handleFieldClick = (field: SigningSessionView['fields'][number]) => {
-  if (!activeSignature.value || !isSignatureField(field)) return;
+  if (!isSignatureField(field)) return;
+  if (!activeSignature.value) {
+    void openSignatureModal();
+    return;
+  }
   placeSignature(field);
 };
 
@@ -861,6 +864,7 @@ const signDocument = async () => {
     });
 
     clearPlacements();
+    await router.push('/app/documents');
   } catch (err) {
     doc.value = optimisticManager.reject(doc.value, optimistic.mutation.id);
     errorMessage.value = err instanceof Error ? err.message : 'Unable to apply signature.';
@@ -1023,8 +1027,20 @@ const loadPdf = async () => {
     if (!doc.value) return;
     let pdf: PDFDocumentProxy | null = null;
 
+    if (token.value) {
+      try {
+        const response = await apiClient.get<ArrayBuffer>(`/sign/${token.value}/file`, {
+          responseType: 'arraybuffer',
+        });
+        if (tokenId !== pdfLoadToken.value) return;
+        pdf = await getDocument({ data: response.data }).promise;
+      } catch {
+        pdf = null;
+      }
+    }
+
     const authToken = localStorage.getItem('auth_token');
-    if (authToken) {
+    if (!pdf && authToken) {
       try {
         const response = await apiClient.get<ArrayBuffer>(`/documents/${doc.value.id}/file`, {
           responseType: 'arraybuffer',
@@ -1260,6 +1276,47 @@ onBeforeUnmount(() => {
 .panel-section {
   display: grid;
   gap: 0.7rem;
+}
+
+.palette {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.palette-item {
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  padding: 0.45rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.palette-item:last-child {
+  border-bottom: none;
+}
+
+.palette-icon {
+  width: 16px;
+  height: 16px;
+  stroke: var(--muted);
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.palette-item:hover .palette-icon {
+  stroke: var(--accent);
+}
+
+.palette-label {
+  font-weight: 500;
+  color: var(--ink);
 }
 
 .thumb-list {
@@ -1542,6 +1599,49 @@ onBeforeUnmount(() => {
 .signature-panel {
   display: grid;
   gap: 1rem;
+}
+
+.signature-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 60;
+}
+
+.signature-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+.signature-dialog {
+  position: relative;
+  width: min(720px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 1.4rem;
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 1rem;
+  z-index: 1;
+}
+
+.signature-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .signature-tabs {

@@ -1113,6 +1113,11 @@ const resolveNormalizedRect = (field: DocumentField, size: { width: number; heig
   return normalizedFromOptions ?? computeNormalizedRect(field, size);
 };
 
+const normalizeTextInput = (value?: string | null) => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
 const buildNormalizedOptions = (field: DocumentField, size: { width: number; height: number }) => {
   const existing =
     field.options && typeof field.options === 'object' ? (field.options as Record<string, unknown>) : {};
@@ -1125,9 +1130,9 @@ const buildNormalizedOptions = (field: DocumentField, size: { width: number; hei
 const buildFieldUpdatePayload = (field: DocumentField) => {
   const size = pageSizes.value[field.page];
   return {
-    label: field.label ?? undefined,
-    placeholder: field.placeholder ?? undefined,
-    signerEmail: field.signerEmail || undefined,
+    label: normalizeTextInput(field.label),
+    placeholder: normalizeTextInput(field.placeholder),
+    signerEmail: normalizeTextInput(field.signerEmail)?.toLowerCase(),
     required: field.required ?? undefined,
     value: field.value ?? undefined,
     options: size ? buildNormalizedOptions(field, size) : field.options ?? undefined,
@@ -1252,9 +1257,9 @@ const persistActiveField = async () => {
   const field = activeField.value;
   if (!doc.value || !field) return;
   const updated = {
-    label: activeFieldDraft.label,
-    placeholder: activeFieldDraft.placeholder,
-    signerEmail: activeFieldDraft.signerEmail || undefined,
+    label: normalizeTextInput(activeFieldDraft.label),
+    placeholder: normalizeTextInput(activeFieldDraft.placeholder),
+    signerEmail: normalizeTextInput(activeFieldDraft.signerEmail)?.toLowerCase(),
     required: activeFieldDraft.required,
   };
   try {
