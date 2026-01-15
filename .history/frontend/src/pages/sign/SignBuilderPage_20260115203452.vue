@@ -97,20 +97,7 @@
                       placeholder="e.g. Service Agreement"
                     />
                   </label>
-                  <label class="field-label">
-                    Choose from library
-                    <div class="doc-select">
-                      <select v-model="selectedDocId" @change="handleDocChange">
-                        <option value="">Select PDF document</option>
-                        <option v-for="doc in pdfDocuments" :key="doc.id" :value="doc.id">
-                          {{ doc.title }}
-                        </option>
-                      </select>
-                      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </div>
-                  </label>
+                  
                   <label class="upload-btn upload-block">
                     <input
                       ref="uploadInput"
@@ -125,50 +112,11 @@
 
                 <div v-if="signingIntent === 'send'" class="panel-section">
                   <div class="panel-title">
-                    <span class="panel-icon">
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="8" cy="9" r="3" />
-                        <circle cx="17" cy="8" r="2.5" />
-                        <path d="M2 20a6 6 0 0 1 12 0" />
-                        <path d="M13.5 20a5.5 5.5 0 0 1 8.5 0" />
-                      </svg>
-                    </span>
-                    Recipients
+                    
+                    
                   </div>
-                  <div class="signer-list">
-                    <div v-for="signer in signerInputs" :key="signer.email" class="signer-row">
-                      <div>
-                        <p class="signer-name">{{ signer.isSender ? 'You' : signer.name || signer.email }}</p>
-                        <p class="signer-email">{{ signer.email }}</p>
-                      </div>
-                      <button
-                        v-if="!signer.isSender"
-                        class="icon-btn"
-                        type="button"
-                        @click="removeSigner(signer.email)"
-                      >
-                        x
-                      </button>
-                    </div>
-                  </div>
-                  <div class="signer-form">
-                    <input
-                      v-model="newSignerName"
-                      class="input"
-                      type="text"
-                      placeholder="Recipient full name"
-                      @input="signerError = ''"
-                    />
-                    <input
-                      v-model="newSignerEmail"
-                      class="input"
-                      type="email"
-                      placeholder="Recipient Gmail"
-                      @input="signerError = ''"
-                    />
-                    <button class="btn btn-outline" type="button" @click="addSigner">Add signer</button>
-                    <p v-if="signerError" class="builder-error">{{ signerError }}</p>
-                  </div>
+                  
+                  
                 </div>
 
                 <div v-else class="panel-section">
@@ -232,15 +180,6 @@
             {{ savingDraft ? 'Saving...' : 'Save' }}
           </button>
           <button class="btn btn-outline" type="button" disabled>Detect fields</button>
-          <button
-            v-if="signingIntent === 'send'"
-            class="btn btn-primary"
-            type="button"
-            @click="sendForSigning"
-            :disabled="!canSend || savingDraft || signingNow"
-          >
-            {{ sendLabel }}
-          </button>
           <button
             v-if="signingIntent === 'send'"
             class="btn btn-outline"
@@ -1122,11 +1061,6 @@ const resolveNormalizedRect = (field: DocumentField, size: { width: number; heig
   return normalizedFromOptions ?? computeNormalizedRect(field, size);
 };
 
-const normalizeTextInput = (value?: string | null) => {
-  const trimmed = value?.trim() ?? '';
-  return trimmed.length > 0 ? trimmed : undefined;
-};
-
 const buildNormalizedOptions = (field: DocumentField, size: { width: number; height: number }) => {
   const existing =
     field.options && typeof field.options === 'object' ? (field.options as Record<string, unknown>) : {};
@@ -1139,9 +1073,9 @@ const buildNormalizedOptions = (field: DocumentField, size: { width: number; hei
 const buildFieldUpdatePayload = (field: DocumentField) => {
   const size = pageSizes.value[field.page];
   return {
-    label: normalizeTextInput(field.label),
-    placeholder: normalizeTextInput(field.placeholder),
-    signerEmail: normalizeTextInput(field.signerEmail)?.toLowerCase(),
+    label: field.label ?? undefined,
+    placeholder: field.placeholder ?? undefined,
+    signerEmail: field.signerEmail || undefined,
     required: field.required ?? undefined,
     value: field.value ?? undefined,
     options: size ? buildNormalizedOptions(field, size) : field.options ?? undefined,
@@ -1266,9 +1200,9 @@ const persistActiveField = async () => {
   const field = activeField.value;
   if (!doc.value || !field) return;
   const updated = {
-    label: normalizeTextInput(activeFieldDraft.label),
-    placeholder: normalizeTextInput(activeFieldDraft.placeholder),
-    signerEmail: normalizeTextInput(activeFieldDraft.signerEmail)?.toLowerCase(),
+    label: activeFieldDraft.label,
+    placeholder: activeFieldDraft.placeholder,
+    signerEmail: activeFieldDraft.signerEmail || undefined,
     required: activeFieldDraft.required,
   };
   try {
@@ -2389,24 +2323,26 @@ const sendForSigning = async () => {
     builderError.value = 'Add your email before starting the signing session.';
     return;
   }
-  const senderFields = getSenderFields();
-  if (signingIntent.value === 'self' && fields.value.length === 0) {
+  if (fields.value.length === 0) {
     builderError.value = 'Place at least one field before sending.';
     return;
+  }
+  if (signingIntent.value === 'send') {
+    const hasSenderFields = fields.value.some(
+      (field) => field.signerEmail?.toLowerCase() === senderEmail.value,
+    );
+    if (!hasSenderFields) {
+      builderError.value = 'Assign at least one field to yourself before sending.';
+      return;
+    }
   }
   if (signingIntent.value === 'self') {
     await saveDraft();
     if (builderError.value) return;
     builderNotice.value = '';
   }
-  const includeSender = signingIntent.value === 'self' || senderFields.length > 0;
   const orderedSigners = signingIntent.value === 'send'
-    ? [
-        ...(includeSender
-          ? [senderSigner.value ?? { name: senderName.value, email: senderEmail.value }]
-          : []),
-        ...recipientSigners.value,
-      ]
+    ? [senderSigner.value ?? { name: senderName.value, email: senderEmail.value }, ...recipientSigners.value]
     : [{ name: senderName.value, email: senderEmail.value }];
   const response = await sendDocument(doc.value.id, {
     signers: orderedSigners.map((signer, index) => ({

@@ -348,12 +348,15 @@ export async function submitManifest(params: {
   });
   const fieldMap = new Map(fields.map((field) => [field.id, field]));
   if (fields.length === 0) {
-    throw createHttpError(400, 'NO_FIELDS', 'No signature fields assigned');
-  }
-  const inputIds = new Set(params.fields.map((field) => field.fieldId));
-  for (const field of fields) {
-    if (!inputIds.has(field.id)) {
-      throw createHttpError(400, 'MISSING_FIELD_VALUE', 'All fields must be completed');
+    if (params.fields.length > 0) {
+      throw createHttpError(400, 'NO_FIELDS', 'No signature fields assigned');
+    }
+  } else {
+    const inputIds = new Set(params.fields.map((field) => field.fieldId));
+    for (const field of fields) {
+      if (!inputIds.has(field.id)) {
+        throw createHttpError(400, 'MISSING_FIELD_VALUE', 'All fields must be completed');
+      }
     }
   }
 

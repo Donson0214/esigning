@@ -355,9 +355,6 @@ export async function sendDocument(params: {
       const existingFields = await tx.signatureField.findMany({
         where: { documentId: document.id },
       });
-      if (existingFields.length === 0) {
-        throw createHttpError(400, 'FIELDS_REQUIRED', 'At least one field is required');
-      }
       createdFields = existingFields;
       for (const field of existingFields) {
         if (field.signerId) continue;

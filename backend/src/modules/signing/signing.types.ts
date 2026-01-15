@@ -23,8 +23,7 @@ export const submitManifestSchema = z.object({
         fieldId: z.string().uuid(),
         value: z.string().min(1),
       }),
-    )
-    .min(1),
+    ),
 });
 
 export const uploadSignatureSchema = z.object({
