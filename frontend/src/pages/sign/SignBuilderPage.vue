@@ -371,14 +371,23 @@
           <div class="panel-section" v-if="activeField">
             <div class="panel-title">Field settings</div>
             <label class="field-label">
-              Assigned signer
-              <select v-model="activeFieldDraft.signerEmail" @change="persistActiveField">
-                <option value="">Unassigned</option>
+              Assigned Gmail (optional)
+              <input
+                v-model.trim="activeFieldDraft.signerEmail"
+                class="input"
+                type="email"
+                list="signer-email-list"
+                placeholder="recipient@gmail.com"
+                @input="fieldSignerError = ''"
+                @change="persistActiveField"
+              />
+              <datalist id="signer-email-list">
                 <option v-for="signer in signerInputs" :key="signer.email" :value="signer.email">
                   {{ signer.isSender ? 'You' : signer.name || signer.email }}
                 </option>
-              </select>
+              </datalist>
             </label>
+            <p v-if="fieldSignerError" class="builder-error">{{ fieldSignerError }}</p>
             <label class="toggle">
               <input v-model="activeFieldDraft.required" type="checkbox" @change="persistActiveField" />
               Required
@@ -687,6 +696,7 @@ const activeFieldDraft = reactive({
   signerEmail: '',
   required: true,
 });
+const fieldSignerError = ref('');
 
 const pdfError = ref('');
 const textPreview = ref('');
@@ -1128,6 +1138,21 @@ const normalizeTextInput = (value?: string | null) => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
+const validateSignerEmailDraft = () => {
+  const normalized = normalizeTextInput(activeFieldDraft.signerEmail)?.toLowerCase();
+  if (!normalized) return '';
+  if (!isValidEmail(normalized) || !normalized.endsWith('@gmail.com')) {
+    fieldSignerError.value = 'Use a valid Gmail address.';
+    return null;
+  }
+  const exists = signerInputs.value.some((signer) => signer.email.toLowerCase() === normalized);
+  if (!exists) {
+    fieldSignerError.value = 'Add this recipient before assigning the field.';
+    return null;
+  }
+  return normalized;
+};
+
 const buildNormalizedOptions = (field: DocumentField, size: { width: number; height: number }) => {
   const existing =
     field.options && typeof field.options === 'object' ? (field.options as Record<string, unknown>) : {};
@@ -1240,6 +1265,7 @@ const selectField = (id: string) => {
   activeFieldId.value = id;
   const field = fields.value.find((item) => item.id === id);
   if (!field) return;
+  fieldSignerError.value = '';
   activeFieldDraft.label = field.label || '';
   activeFieldDraft.placeholder = field.placeholder || '';
   activeFieldDraft.signerEmail = field.signerEmail || '';
@@ -1283,10 +1309,12 @@ const canDownloadField = computed(() => {
 const persistActiveField = async () => {
   const field = activeField.value;
   if (!doc.value || !field) return;
+  const normalizedSignerEmail = validateSignerEmailDraft();
+  if (normalizedSignerEmail === null) return;
   const updated = {
     label: normalizeTextInput(activeFieldDraft.label),
     placeholder: normalizeTextInput(activeFieldDraft.placeholder),
-    signerEmail: normalizeTextInput(activeFieldDraft.signerEmail)?.toLowerCase(),
+    signerEmail: normalizedSignerEmail || undefined,
     required: activeFieldDraft.required,
   };
   try {
@@ -2699,16 +2727,13 @@ const sendForSigning = async () => {
   const senderFields = getSenderFields();
   if (signingIntent.value === 'send' && senderFields.length > 0) {
     const senderSignatureFields = senderFields.filter(isSignatureField);
-    if (senderSignatureFields.length === 0) {
-      builderError.value = 'Add a signature or initial field assigned to you before sending.';
+    const canAutoSign =
+      senderSignatureFields.length > 0 &&
+      senderSignatureFields.every((field) => Boolean((field.value ?? '').trim()));
+    if (canAutoSign) {
+      await signNowAndSend();
       return;
     }
-    if (senderSignatureFields.some((field) => !(field.value ?? '').trim())) {
-      builderError.value = 'Add your signature or initials to your fields before sending.';
-      return;
-    }
-    await signNowAndSend();
-    return;
   }
   if (signingIntent.value === 'self' && fields.value.length === 0) {
     builderError.value = 'Place at least one field before sending.';
