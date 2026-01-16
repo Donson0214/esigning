@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import {
   createDocumentSchema,
   sendDocumentSchema,
+  shareDocumentSchema,
   createFieldSchema,
   updateFieldSchema,
 } from './document.types';
@@ -168,6 +169,29 @@ export async function sendDocument(req: Request, res: Response, next: NextFuncti
       },
     });
     res.json(document);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function shareDocument(req: Request, res: Response, next: NextFunction) {
+  try {
+    const payload = shareDocumentSchema.parse(req.body);
+    const documentId = getParam(req.params.id);
+    if (!documentId) {
+      return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+    }
+    const result = await documentService.shareDocument({
+      ownerId: req.user!.id,
+      documentId,
+      payload,
+      meta: {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? undefined,
+        correlationId: req.correlationId,
+      },
+    });
+    res.json(result);
   } catch (err) {
     next(err);
   }

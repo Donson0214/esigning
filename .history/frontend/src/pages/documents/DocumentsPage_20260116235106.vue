@@ -2,7 +2,7 @@
   <div class="documents-page">
     <section class="page-header">
       <div>
-        <h2>Documents</h2>
+        
         <p>Manage and track all your documents</p>
       </div>
       
@@ -170,12 +170,6 @@
                   </svg>
                   Download
                 </button>
-                <button type="button" class="menu-item" @click="openSend(doc)">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M3 11l18-8-8 18-2-7-7-3Z" />
-                  </svg>
-                  Send document
-                </button>
                 <button type="button" class="menu-item danger" @click="removeDocument(doc.id)">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M4 7h16" />
@@ -292,51 +286,15 @@
           </div>
         </div>
       </div>
-      <div v-if="sendOpen && sendDoc" class="modal-backdrop" @click.self="closeSend">
-        <div class="modal-card send-card">
-          <div class="modal-header">
-            <h3>Send document</h3>
-            <button class="close" type="button" @click="closeSend">Close</button>
-          </div>
-          <div class="send-body">
-            <label class="send-label" for="send-email">Recipient Gmail</label>
-            <input
-              id="send-email"
-              v-model.trim="sendEmail"
-              type="email"
-              placeholder="name@gmail.com"
-              autocomplete="email"
-            />
-            <label class="send-label" for="send-message">Message (optional)</label>
-            <textarea
-              id="send-message"
-              v-model.trim="sendMessage"
-              rows="4"
-              placeholder="Add a short message for the recipient"
-            ></textarea>
-            <p v-if="sendError" class="error-text send-error">{{ sendError }}</p>
-            <p class="send-note">A confirmation notification will appear after sending.</p>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-outline small" type="button" @click="closeSend">
-              Cancel
-            </button>
-            <button class="btn btn-primary small" type="button" @click="sendViaGmail">
-              Send
-            </button>
-          </div>
-        </div>
-      </div>
     </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { deleteDocument, shareDocument } from '@/features/documents/api';
+import { deleteDocument } from '@/features/documents/api';
 import { useDocuments } from '@/features/documents/composables';
 import type { Document, Signer } from '@/features/documents/types';
-import { useToast } from '@/shared/lib/toast';
 
 type DocumentStatus = 'Completed' | 'Pending' | 'Signed' | 'Viewed' | 'Expired' | 'Declined' | 'Draft';
 
@@ -356,7 +314,6 @@ type DocumentItem = {
 };
 
 const { documents, loading, error, refresh, presence } = useDocuments();
-const { pushToast } = useToast();
 
 const presenceCount = (docId: string) => presence.value[docId] ?? 0;
 
@@ -580,53 +537,6 @@ const openPreview = (doc: DocumentItem) => {
 const closePreview = () => {
   previewOpen.value = false;
   previewDoc.value = null;
-};
-
-const sendOpen = ref(false);
-const sendDoc = ref<DocumentItem | null>(null);
-const sendEmail = ref('');
-const sendMessage = ref('');
-const sendError = ref<string | null>(null);
-
-const openSend = (doc: DocumentItem) => {
-  sendDoc.value = doc;
-  sendEmail.value = '';
-  sendMessage.value = '';
-  sendError.value = null;
-  sendOpen.value = true;
-  menuOpenId.value = null;
-};
-
-const closeSend = () => {
-  sendOpen.value = false;
-  sendDoc.value = null;
-  sendEmail.value = '';
-  sendMessage.value = '';
-  sendError.value = null;
-};
-
-const sendViaGmail = async () => {
-  if (!sendDoc.value) return;
-  const email = sendEmail.value.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !email.endsWith('@gmail.com')) {
-    sendError.value = 'Enter a valid @gmail.com address.';
-    return;
-  }
-  sendError.value = null;
-  try {
-    await shareDocument(sendDoc.value.id, {
-      email,
-      message: sendMessage.value.trim() || undefined,
-    });
-    pushToast({
-      title: 'Document sent',
-      message: `${sendDoc.value.title} sent to ${email}.`,
-      tone: 'success',
-    });
-    closeSend();
-  } catch {
-    sendError.value = 'Unable to send the document. Please try again.';
-  }
 };
 
 const downloadDocument = async (doc: DocumentItem) => {
@@ -1206,64 +1116,21 @@ onBeforeUnmount(() => {
   z-index: 20;
 }
 
-  .modal-card {
-    width: min(420px, 92vw);
-    background: var(--surface);
-    border-radius: 18px;
+.modal-card {
+  width: min(420px, 92vw);
+  background: var(--surface);
+  border-radius: 18px;
   padding: 1.5rem;
   box-shadow: var(--shadow-lg);
   display: grid;
   gap: 1.2rem;
 }
 
-  .preview-card {
-    width: min(960px, 92vw);
-    height: min(80vh, 720px);
-    grid-template-rows: auto 1fr auto;
-  }
-
-  .send-card {
-    width: min(480px, 92vw);
-  }
-
-  .send-body {
-    display: grid;
-    gap: 0.6rem;
-  }
-
-  .send-label {
-    font-size: 0.8rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .send-body input {
-    height: 44px;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    padding: 0 0.9rem;
-    background: var(--surface);
-  }
-
-  .send-body textarea {
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    padding: 0.7rem 0.9rem;
-    background: var(--surface);
-    resize: vertical;
-  }
-
-  .send-note {
-    margin: 0;
-    font-size: 0.8rem;
-    color: var(--muted);
-  }
-
-  .send-error {
-    margin: 0;
-    padding: 0;
-  }
+.preview-card {
+  width: min(960px, 92vw);
+  height: min(80vh, 720px);
+  grid-template-rows: auto 1fr auto;
+}
 
 .preview-body {
   border: 1px solid var(--line);

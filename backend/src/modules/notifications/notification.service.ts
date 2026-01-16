@@ -107,7 +107,13 @@ async function updateDelivery(params: {
   });
 }
 
-async function sendEmailWithRetry(payload: { to: string | string[]; subject: string; text: string; html: string }) {
+async function sendEmailWithRetry(payload: {
+  to: string | string[];
+  subject: string;
+  text: string;
+  html: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
+}) {
   const maxAttempts = 3;
   let attempt = 0;
   let lastError: Error | null = null;

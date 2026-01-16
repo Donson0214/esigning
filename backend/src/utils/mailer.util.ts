@@ -6,6 +6,11 @@ type SendMailInput = {
   subject: string;
   text?: string;
   html?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
 };
 
 export async function sendMail(input: SendMailInput) {
@@ -15,5 +20,6 @@ export async function sendMail(input: SendMailInput) {
     subject: input.subject,
     text: input.text,
     html: input.html,
+    attachments: input.attachments,
   });
 }

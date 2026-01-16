@@ -126,3 +126,14 @@ export async function sendDocument(
   );
   return response.data;
 }
+
+export async function shareDocument(
+  documentId: string,
+  payload: {
+    email: string;
+    message?: string;
+  },
+) {
+  const response = await apiClient.post<{ sent: boolean }>(`/documents/${documentId}/share`, payload);
+  return response.data;
+}

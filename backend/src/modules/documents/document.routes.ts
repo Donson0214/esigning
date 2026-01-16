@@ -16,6 +16,7 @@ import {
   listReceivedDocuments,
   listReceivedSummary,
   sendDocument,
+  shareDocument,
   updateField,
   createSigningToken,
 } from './document.controller';
@@ -36,6 +37,7 @@ documentRoutes.delete('/:id', deleteDocument);
 documentRoutes.get('/:id/audit', getAudit);
 documentRoutes.get('/:id/certificate', getCertificate);
 documentRoutes.post('/:id/send', sendDocument);
+documentRoutes.post('/:id/share', shareDocument);
 documentRoutes.post('/:id/fields', createField);
 documentRoutes.patch('/:id/fields/:fieldId', updateField);
 documentRoutes.delete('/:id/fields/:fieldId', deleteField);

@@ -4,6 +4,7 @@ type EmailTemplateType =
   | 'reminder.pending_signature'
   | 'document.signed'
   | 'document.completed'
+  | 'document.shared'
   | 'user.invited';
 
 type EmailTemplateData = {
@@ -13,8 +14,10 @@ type EmailTemplateData = {
   signerName?: string;
   orgName?: string;
   actionUrl?: string;
+  downloadUrl?: string;
   expiresAt?: string;
   portalUrl?: string;
+  customMessage?: string;
 };
 
 const escapeHtml = (value: string) =>
@@ -25,21 +28,36 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+const formatMessage = (value?: string) => {
+  if (!value) return '';
+  return escapeHtml(value).replace(/\r?\n/g, '<br />');
+};
+
 const buildEmailFrame = (params: {
   title: string;
   preview: string;
   body: string;
   actionLabel?: string;
   actionUrl?: string;
+  secondaryActionLabel?: string;
+  secondaryActionUrl?: string;
   footer?: string;
 }) => {
   const action =
     params.actionLabel && params.actionUrl
-      ? `<p style="margin:24px 0;">
+      ? `<p style="margin:24px 0;display:flex;gap:12px;flex-wrap:wrap;">
            <a href="${params.actionUrl}"
               style="background:#335cff;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;display:inline-block;font-weight:600;">
               ${escapeHtml(params.actionLabel)}
            </a>
+           ${
+             params.secondaryActionLabel && params.secondaryActionUrl
+               ? `<a href="${params.secondaryActionUrl}"
+                  style="background:#eef2ff;color:#1d4ed8;text-decoration:none;padding:12px 18px;border-radius:10px;display:inline-block;font-weight:600;">
+                  ${escapeHtml(params.secondaryActionLabel)}
+                 </a>`
+               : ''
+           }
          </p>`
       : '';
   const footer = params.footer ? `<p style="color:#64748b;font-size:12px;">${params.footer}</p>` : '';
@@ -73,6 +91,7 @@ export function renderEmailTemplate(template: EmailTemplateType, data: EmailTemp
   const senderName = data.senderName ? escapeHtml(data.senderName) : 'a teammate';
   const orgName = data.orgName ? escapeHtml(data.orgName) : 'your organization';
   const signerName = data.signerName ? escapeHtml(data.signerName) : 'A signer';
+  const customMessage = formatMessage(data.customMessage);
   if (template === 'signer.invited') {
     const subject = `You've been invited to sign: ${documentTitle}`;
     const expires = data.expiresAt ? `This link expires at ${data.expiresAt}.` : '';
@@ -140,6 +159,32 @@ export function renderEmailTemplate(template: EmailTemplateType, data: EmailTemp
       actionLabel: 'View document',
       actionUrl: data.actionUrl,
       footer: 'You are receiving this because you are the document owner.',
+    });
+    return { subject, text, html };
+  }
+
+  if (template === 'document.shared') {
+    const subject = `${senderName} shared a document: ${documentTitle}`;
+    const textMessage = data.customMessage ? `\n\nMessage:\n${data.customMessage}` : '';
+    const text = `Hi ${recipientName},\n\n${senderName} shared "${documentTitle}" with you.\nOpen the document: ${data.actionUrl ?? ''}\nDownload: ${data.downloadUrl ?? ''}${textMessage}\n\nIf you did not expect this, you can ignore this email.`;
+    const messageBlock = customMessage ? `<p><strong>Message:</strong><br />${customMessage}</p>` : '';
+    const downloadLink = data.downloadUrl
+      ? `<p><a href="${data.downloadUrl}" style="color:#335cff;font-weight:600;">Download document</a></p>`
+      : '';
+    const body = `<p>Hi ${recipientName},</p>
+      <p><strong>${senderName}</strong> shared "<strong>${documentTitle}</strong>" with you.</p>
+      ${messageBlock}
+      ${downloadLink}
+      <p>If you did not expect this, you can ignore this email.</p>`;
+    const { html } = buildEmailFrame({
+      title: 'Document shared',
+      preview: 'Document shared',
+      body,
+      actionLabel: 'Preview document',
+      actionUrl: data.actionUrl,
+      secondaryActionLabel: data.downloadUrl ? 'Download' : undefined,
+      secondaryActionUrl: data.downloadUrl,
+      footer: 'Sent via WilsonFlow.',
     });
     return { subject, text, html };
   }
