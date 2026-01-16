@@ -18,12 +18,13 @@
       </div>
     </header>
     <p v-if="waitMessage" class="muted">{{ waitMessage }}</p>
+    <p v-if="overlayHint" class="muted">{{ overlayHint }}</p>
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
     <section v-if="doc" class="builder-body">
       <aside class="left-panel">
         <div class="panel-title">Pages</div>
-        <div class="thumb-list">
+        <div class="thumb-list" ref="thumbListRef">
           <button
             v-for="page in pageCount"
             :key="page"
@@ -48,6 +49,9 @@
             <span class="status-pill" :class="missingSignatureCount ? 'warning' : 'success'">
               {{ missingSignatureCount }} signature{{ missingSignatureCount === 1 ? '' : 's' }} left
             </span>
+            <button class="btn btn-outline" type="button" @click="toggleOverlays" :disabled="!fields.length">
+              {{ showOverlays ? 'Hide overlays' : 'Show overlays' }}
+            </button>
           </div>
         </div>
         <div class="viewer" ref="viewerRef">
@@ -64,7 +68,7 @@
             @click="handlePageClick($event, page)"
           >
             <canvas :ref="setCanvasRef(page)" class="pdf-canvas"></canvas>
-            <div class="overlay">
+            <div v-if="showOverlays" class="overlay">
               <div
                 v-for="field in fieldsByPage(page)"
                 :key="field.id"
@@ -72,7 +76,7 @@
                 :class="fieldClass(field)"
                 :style="fieldStyle(field, page)"
                 @click.stop="handleFieldClick(field)"
-                :draggable="canSign"
+                :draggable="canInteract"
                 @dragstart="startFieldDrag($event, field)"
                 @dragend="endFieldDrag"
               >
@@ -108,7 +112,7 @@
                   type="button"
                   @pointerdown.stop
                   @click.stop="clearPlacement(field.id)"
-                  :disabled="!canSign"
+                  :disabled="!canInteract"
                 >
                   x
                 </button>
@@ -135,8 +139,8 @@
               :key="field.type"
               class="palette-item"
               type="button"
-              :disabled="!canSign"
-              :draggable="canSign"
+              :disabled="!canInteract"
+              :draggable="canInteract"
               @click="handlePaletteClick(field.type)"
               @dragstart="startPaletteDrag($event, field.type)"
               @dragend="endPaletteDrag"
@@ -156,7 +160,7 @@
 
         <div
           class="panel-section delete-zone"
-          :class="[isDeleteZoneActive && 'active', !canSign && 'disabled']"
+          :class="[isDeleteZoneActive && 'active', !canInteract && 'disabled']"
           @dragover.prevent
           @dragenter.prevent="isDeleteZoneActive = true"
           @dragleave.prevent="isDeleteZoneActive = false"
@@ -240,11 +244,27 @@
           </div>
         </div>
 
+        <div v-if="signatureMode === 'type'" class="signature-style-grid">
+          <button
+            v-for="style in signatureStyles"
+            :key="style.id"
+            class="signature-style"
+            :class="signatureFont === style.font && 'active'"
+            type="button"
+            @click="signatureFont = style.font"
+          >
+            <span class="style-preview" :style="{ fontFamily: style.font }">
+              {{ typedSignature || 'Your signature' }}
+            </span>
+            <span class="style-label">{{ style.label }}</span>
+          </button>
+        </div>
+
         <div class="signature-palette">
           <div
             class="signature-chip"
-            :class="(!activeSignature || !canSign) && 'disabled'"
-            :draggable="Boolean(activeSignature && canSign)"
+            :class="(!activeSignature || !canInteract) && 'disabled'"
+            :draggable="Boolean(activeSignature && canInteract)"
             @dragstart="startSignatureDrag"
             @dragend="endSignatureDrag"
           >
@@ -260,7 +280,7 @@
             class="btn btn-outline"
             type="button"
             @click="clearPlacements"
-            :disabled="!placementCount || !canSign"
+            :disabled="!placementCount || !canInteract"
           >
             Clear placements
           </button>
@@ -268,7 +288,7 @@
             class="btn btn-primary"
             type="button"
             @click="saveSignature"
-            :disabled="!canSaveSignature || !canSign"
+            :disabled="!canSaveSignature || !canInteract"
           >
             Save signature
           </button>
@@ -343,11 +363,8 @@ import { apiClient } from '@/shared/lib/axios';
 import { createId } from '@/shared/lib/ids';
 import { OptimisticManager } from '@/shared/lib/optimistic';
 import {
-  applySignature,
+  completeSigning,
   createSigningField,
-  createSigningSession,
-  submitManifest,
-  uploadSignature,
   viewSigningSession,
   type SigningSessionView,
 } from '@/features/signing/api';
@@ -385,7 +402,14 @@ type SignaturePlacement = {
   signature: SignaturePayload;
 };
 
-const signatureFont = 'Helvetica, Arial, sans-serif';
+type SignatureStyle = { id: string; label: string; font: string };
+
+const signatureStyles: SignatureStyle[] = [
+  { id: 'classic', label: 'Classic', font: '"Segoe Script", "Great Vibes", "Allura", cursive' },
+  { id: 'modern', label: 'Modern', font: '"Gabriola", "Satisfy", "Segoe Print", cursive' },
+  { id: 'heritage', label: 'Heritage', font: '"Lucida Handwriting", "Allura", "Segoe Script", cursive' },
+  { id: 'bold', label: 'Bold', font: '"Segoe Print", "Pacifico", "Brush Script MT", cursive' },
+];
 
 const route = useRoute();
 const router = useRouter();
@@ -395,7 +419,8 @@ const doc = ref<SignDocState | null>(null);
 const signer = ref<SigningSessionView['signer'] | null>(null);
 const fields = ref<SigningSessionView['fields']>([]);
 const errorMessage = ref('');
-const signingNow = ref(false);
+const actionState = ref<'idle' | 'signing' | 'redirecting' | 'error'>('idle');
+const signingNow = computed(() => actionState.value === 'signing' || actionState.value === 'redirecting');
 
 const goBack = () => router.push('/app/documents');
 
@@ -404,6 +429,7 @@ const scale = ref(1);
 const pageCount = ref(0);
 const pageSizes = ref<Record<number, { width: number; height: number }>>({});
 const viewerRef = ref<HTMLDivElement | null>(null);
+const thumbListRef = ref<HTMLDivElement | null>(null);
 const pageRefs = new Map<number, HTMLDivElement>();
 const canvasRefs = new Map<number, HTMLCanvasElement>();
 const thumbRefs = new Map<number, HTMLCanvasElement>();
@@ -411,8 +437,21 @@ const pdfError = ref('');
 const pdfLoadToken = ref(0);
 let renderAllPagesQueue: Promise<void> = Promise.resolve();
 let renderThumbsQueue: Promise<void> = Promise.resolve();
+let renderDebounceTimer: number | null = null;
+let thumbDebounceTimer: number | null = null;
+const renderedPages = new Set<number>();
+const renderingPages = new Set<number>();
+const visiblePages = new Set<number>();
+const renderedThumbPages = new Set<number>();
+const renderingThumbPages = new Set<number>();
+const visibleThumbPages = new Set<number>();
+const renderVersion = ref(0);
+const thumbRenderVersion = ref(0);
+let pageObserver: IntersectionObserver | null = null;
+let thumbObserver: IntersectionObserver | null = null;
 
 const signatureMode = ref<'draw' | 'type' | 'upload'>('draw');
+const signatureFont = ref(signatureStyles[0].font);
 const typedSignature = ref('');
 const signatureImage = ref('');
 const hasDrawing = ref(false);
@@ -441,6 +480,7 @@ const fieldDraftValue = ref('');
 const fieldDraftChecked = ref(false);
 const fieldDraftFileName = ref('');
 const fieldDraftFileData = ref('');
+const showOverlays = ref(true);
 
 const fieldPalette = [
   { type: 'SIGNATURE', label: 'Signature' },
@@ -524,6 +564,28 @@ const activeFieldLabel = computed(() => {
 });
 const activeFieldChoices = computed(() => (activeField.value ? getFieldChoices(activeField.value) : []));
 
+const renderTypedSignatureDataUrl = (text: string, fontFamily: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) return '';
+  const fontSize = 64;
+  const padding = 24;
+  context.font = `${fontSize}px ${fontFamily}`;
+  const metrics = context.measureText(trimmed);
+  const width = Math.ceil(metrics.width + padding * 2);
+  const height = Math.ceil(fontSize + padding * 2);
+  canvas.width = width;
+  canvas.height = height;
+  context.font = `${fontSize}px ${fontFamily}`;
+  context.fillStyle = getSignatureInkColor();
+  context.textBaseline = 'middle';
+  context.textAlign = 'center';
+  context.fillText(trimmed, width / 2, height / 2);
+  return canvas.toDataURL('image/png');
+};
+
 const activeSignature = computed<SignaturePayload | null>(() => {
   if (signatureMode.value === 'draw') {
     if (!drawnSignature.value) return null;
@@ -540,13 +602,22 @@ const activeSignature = computed<SignaturePayload | null>(() => {
   }
   const text = typedSignature.value.trim();
   if (!text) return null;
-  return { type: 'TYPED', text, font: signatureFont };
+  const dataUrl = renderTypedSignatureDataUrl(text, signatureFont.value);
+  return { type: 'UPLOADED', text, font: signatureFont.value, dataUrl };
 });
 
+const loadSignatureFonts = () => {
+  if (typeof document === 'undefined' || !('fonts' in document)) return;
+  signatureStyles.forEach((style) => {
+    void document.fonts.load(`64px ${style.font}`);
+  });
+};
+
 const openSignatureModal = async () => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   fieldModalOpen.value = false;
   signatureModalOpen.value = true;
+  loadSignatureFonts();
   await nextTick();
   if (signatureMode.value === 'draw') {
     resizeCanvas();
@@ -561,7 +632,7 @@ const closeSignatureModal = () => {
 };
 
 const saveSignature = () => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   errorMessage.value = '';
   const signature = activeSignature.value;
   if (!signature) {
@@ -584,7 +655,7 @@ const saveSignature = () => {
 };
 
 const handlePaletteClick = (type: SigningSessionView['fields'][number]['type']) => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   errorMessage.value = '';
   activePaletteType.value = type;
   if (type === 'SIGNATURE' || type === 'INITIAL') {
@@ -604,7 +675,7 @@ const handlePaletteClick = (type: SigningSessionView['fields'][number]['type']) 
 };
 
 const startPaletteDrag = (event: DragEvent, type: SigningSessionView['fields'][number]['type']) => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   draggingFieldType.value = type;
   if (type === 'SIGNATURE' || type === 'INITIAL') {
     draggingSignature.value = activeSignature.value;
@@ -635,7 +706,7 @@ const parseDraggedFieldId = (event: DragEvent) => {
 };
 
 const startFieldDrag = (event: DragEvent, field: SigningSessionView['fields'][number]) => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   draggingFieldId.value = field.id;
   isFieldDragActive.value = true;
   draggingFieldType.value = null;
@@ -747,7 +818,7 @@ const removeFieldById = (fieldId: string) => {
 };
 
 const handleDeleteDrop = () => {
-  if (!canSign.value) {
+  if (!canInteract.value) {
     isDeleteZoneActive.value = false;
     return;
   }
@@ -784,7 +855,7 @@ const buildSignatureFromField = (field: SigningSessionView['fields'][number]) =>
   const signature = {
     type: 'TYPED',
     text: value,
-    font: meta?.font ?? signatureFont,
+    font: meta?.font ?? signatureFont.value,
   } as SignaturePayload;
   return normalizeSignatureForField(field, signature);
 };
@@ -860,7 +931,7 @@ const normalizeSignatureForField = (
   return {
     type: 'TYPED',
     text: initials,
-    font: signature.font ?? metaFont ?? signatureFont,
+    font: signature.font ?? metaFont ?? signatureFont.value,
   } as SignaturePayload;
 };
 
@@ -902,6 +973,12 @@ const canSign = computed(() => {
   if (!doc.value || !sessionView.value) return false;
   const permission = sessionView.value.signer?.canSign;
   return permission !== false;
+});
+const canInteract = computed(() => canSign.value && showOverlays.value);
+
+const overlayHint = computed(() => {
+  if (!canSign.value || showOverlays.value) return '';
+  return 'Signed preview only. Turn on overlays to place fields.';
 });
 
 const waitMessage = computed(() => {
@@ -1017,7 +1094,7 @@ const isFieldFilled = (field: SigningSessionView['fields'][number]) => {
 const fieldClass = (field: SigningSessionView['fields'][number]) => [
   isSignatureField(field) ? 'signature' : 'info',
   isFieldFilled(field) ? 'filled' : '',
-  !canSign.value ? 'blocked' : '',
+  !canInteract.value ? 'blocked' : '',
 ];
 
 const fieldLabel = (field: SigningSessionView['fields'][number]) => field.label || field.type.replace('_', ' ');
@@ -1026,7 +1103,7 @@ const signatureTextStyle = (field: SigningSessionView['fields'][number]) => {
   const metaFont = getSignatureMeta(field)?.font;
   return {
     fontSize: `${Math.min(18, field.height) * scale.value}px`,
-    fontFamily: placementFont ?? metaFont ?? signatureFont,
+    fontFamily: placementFont ?? metaFont ?? signatureFont.value,
     color: getSignatureInkColor(),
   };
 };
@@ -1046,7 +1123,11 @@ const fieldPlaceholderStyle = (field: SigningSessionView['fields'][number]) => {
 };
 
 const setPageRef = (page: number) => (el: HTMLDivElement | null) => {
-  if (el) pageRefs.set(page, el);
+  if (el) {
+    pageRefs.set(page, el);
+    el.dataset.page = String(page);
+    pageObserver?.observe(el);
+  }
 };
 
 const setCanvasRef = (page: number) => (el: HTMLCanvasElement | null) => {
@@ -1054,7 +1135,11 @@ const setCanvasRef = (page: number) => (el: HTMLCanvasElement | null) => {
 };
 
 const setThumbRef = (page: number) => (el: HTMLCanvasElement | null) => {
-  if (el) thumbRefs.set(page, el);
+  if (el) {
+    thumbRefs.set(page, el);
+    el.dataset.thumb = String(page);
+    thumbObserver?.observe(el);
+  }
 };
 
 const scrollToPage = (page: number) => {
@@ -1089,7 +1174,7 @@ const placeSignature = (field: SigningSessionView['fields'][number], signature?:
 };
 
 const handleFieldClick = (field: SigningSessionView['fields'][number]) => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   if (isFieldDragActive.value) return;
   if (isSignatureField(field)) {
     if (!activeSignature.value) {
@@ -1103,14 +1188,14 @@ const handleFieldClick = (field: SigningSessionView['fields'][number]) => {
 };
 
 const clearPlacement = (fieldId: string) => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   const next = { ...placements.value };
   delete next[fieldId];
   placements.value = next;
 };
 
 const clearPlacements = () => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   placements.value = {};
   if (placementStorageKey.value) {
     localStorage.removeItem(placementStorageKey.value);
@@ -1242,7 +1327,7 @@ const createFieldAtPosition = async (
 };
 
 const handleDrop = async (event: DragEvent, page: number) => {
-  if (!canSign.value) {
+  if (!canInteract.value) {
     draggingFieldType.value = null;
     draggingSignature.value = null;
     activePaletteType.value = null;
@@ -1332,7 +1417,7 @@ const handleDrop = async (event: DragEvent, page: number) => {
 };
 
 const handlePageClick = async (event: MouseEvent, page: number) => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   if (signatureModalOpen.value || fieldModalOpen.value || isFieldDragActive.value) return;
   const type = activePaletteType.value;
   if (!type) return;
@@ -1350,7 +1435,7 @@ const handlePageClick = async (event: MouseEvent, page: number) => {
 };
 
 const startSignatureDrag = (event: DragEvent) => {
-  if (!canSign.value || !activeSignature.value) return;
+  if (!canInteract.value || !activeSignature.value) return;
   draggingFieldType.value = null;
   draggingSignature.value = activeSignature.value;
   event.dataTransfer?.setData('text/plain', 'signature');
@@ -1358,6 +1443,18 @@ const startSignatureDrag = (event: DragEvent) => {
 
 const endSignatureDrag = () => {
   draggingSignature.value = null;
+};
+
+const toggleOverlays = () => {
+  showOverlays.value = !showOverlays.value;
+  if (!showOverlays.value) {
+    activePaletteType.value = null;
+    draggingFieldType.value = null;
+    draggingSignature.value = null;
+    draggingFieldId.value = null;
+    isFieldDragActive.value = false;
+    isDeleteZoneActive.value = false;
+  }
 };
 
 const loadSession = async () => {
@@ -1374,6 +1471,7 @@ const loadSession = async () => {
     };
     fields.value = sessionView.value.fields;
     deletedFieldIds.value = new Set();
+    showOverlays.value = sessionView.value.signer?.canSign !== false;
     await nextTick();
     await loadPdf();
     loadPlacements();
@@ -1384,7 +1482,7 @@ const loadSession = async () => {
 };
 
 const openFieldModal = (field: SigningSessionView['fields'][number]) => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   if (isSignatureField(field)) {
     if (activeSignature.value) {
       placeSignature(field);
@@ -1430,7 +1528,7 @@ const updateFieldValue = (fieldId: string, value: string | null) => {
 };
 
 const saveFieldValue = () => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   const field = activeField.value;
   if (!field) return;
   let nextValue: string | null = fieldDraftValue.value.trim();
@@ -1450,7 +1548,7 @@ const saveFieldValue = () => {
 };
 
 const clearFieldValue = () => {
-  if (!canSign.value) return;
+  if (!canInteract.value) return;
   const field = activeField.value;
   if (!field) return;
   const nextValue = field.type === 'CHECKBOX' ? 'unchecked' : null;
@@ -1487,11 +1585,8 @@ const signDocument = async () => {
   });
   doc.value = optimistic.nextState;
 
-  signingNow.value = true;
+  actionState.value = 'signing';
   try {
-    const correlationId = optimistic.mutation.correlationId;
-    const session = await createSigningSession(doc.value.id, token.value, undefined, correlationId);
-
     const pendingIds = pendingFieldIds.value;
     const removedIds = deletedFieldIds.value;
     const fieldsPayload: Array<{ fieldId: string; value: string }> = [];
@@ -1508,29 +1603,14 @@ const signDocument = async () => {
       fieldsPayload.push({ fieldId: field.id, value: resolveFieldValue(field) });
     }
 
-    await submitManifest({
-      docId: doc.value.id,
-      signingToken: token.value,
-      signingSessionId: session.data.signingSessionId,
-      fields: fieldsPayload,
-      correlationId,
-    });
-
     const signatureArtifact = resolveSignatureArtifact();
 
-    await uploadSignature({
+    const correlationId = optimistic.mutation.correlationId;
+    const applyResult = await completeSigning({
       docId: doc.value.id,
       signingToken: token.value,
-      signingSessionId: session.data.signingSessionId,
-      type: signatureArtifact.type,
-      data: signatureArtifact.data,
-      correlationId,
-    });
-
-    const applyResult = await applySignature({
-      docId: doc.value.id,
-      signingToken: token.value,
-      signingSessionId: session.data.signingSessionId,
+      fields: fieldsPayload,
+      signature: signatureArtifact,
       correlationId,
     });
 
@@ -1541,13 +1621,15 @@ const signDocument = async () => {
     });
 
     clearPlacements();
+    actionState.value = 'redirecting';
     await router.push('/app/documents');
   } catch (err) {
     doc.value = optimisticManager.reject(doc.value, optimistic.mutation.id);
     const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
     errorMessage.value = message || (err instanceof Error ? err.message : 'Unable to apply signature.');
+    actionState.value = 'error';
   } finally {
-    signingNow.value = false;
+    actionState.value = 'idle';
   }
 };
 
@@ -1775,9 +1857,15 @@ const loadPdf = async () => {
     pdfDoc.value = pdf;
     pageCount.value = pdf.numPages;
     pageSizes.value = {};
+    renderedPages.clear();
+    renderedThumbPages.clear();
+    await measurePages(tokenId);
     await nextTick();
-    await enqueueRenderAllPages(tokenId);
-    await enqueueRenderThumbnails(tokenId);
+    updateCanvasLayout();
+    setupPageObserver();
+    setupThumbObserver();
+    scheduleRenderVisiblePages();
+    scheduleRenderVisibleThumbs();
   } catch (err) {
     if (tokenId !== pdfLoadToken.value) return;
     pdfDoc.value?.destroy();
@@ -1788,16 +1876,65 @@ const loadPdf = async () => {
   }
 };
 
-const renderAllPages = async (tokenId = pdfLoadToken.value) => {
+const thumbScale = 0.2;
+
+const measurePages = async (tokenId = pdfLoadToken.value) => {
   const pdf = pdfDoc.value;
   if (!pdf) return;
+  const sizes: Record<number, { width: number; height: number }> = {};
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     if (tokenId !== pdfLoadToken.value) return;
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1 });
-    pageSizes.value = { ...pageSizes.value, [pageNumber]: { width: viewport.width, height: viewport.height } };
+    sizes[pageNumber] = { width: viewport.width, height: viewport.height };
+  }
+  pageSizes.value = sizes;
+  updateCanvasLayout();
+};
+
+const updateCanvasLayout = () => {
+  Object.entries(pageSizes.value).forEach(([pageKey, size]) => {
+    const pageNumber = Number(pageKey);
     const canvas = canvasRefs.get(pageNumber);
-    if (!canvas) continue;
+    if (canvas) {
+      canvas.style.width = `${size.width * scale.value}px`;
+      canvas.style.height = `${size.height * scale.value}px`;
+      if (!renderedPages.has(pageNumber) && canvas.width === 0 && canvas.height === 0) {
+        canvas.width = 1;
+        canvas.height = 1;
+      }
+    }
+    const thumbCanvas = thumbRefs.get(pageNumber);
+    if (thumbCanvas) {
+      thumbCanvas.style.width = `${size.width * thumbScale}px`;
+      thumbCanvas.style.height = `${size.height * thumbScale}px`;
+      if (!renderedThumbPages.has(pageNumber) && thumbCanvas.width === 0 && thumbCanvas.height === 0) {
+        thumbCanvas.width = 1;
+        thumbCanvas.height = 1;
+      }
+    }
+  });
+};
+
+const renderPage = async (
+  pageNumber: number,
+  tokenId = pdfLoadToken.value,
+  version = renderVersion.value,
+) => {
+  const pdf = pdfDoc.value;
+  if (!pdf) return;
+  if (renderingPages.has(pageNumber)) return;
+  if (renderedPages.has(pageNumber) && version === renderVersion.value) return;
+  renderingPages.add(pageNumber);
+  try {
+    const page = await pdf.getPage(pageNumber);
+    if (tokenId !== pdfLoadToken.value || version !== renderVersion.value) return;
+    const viewport = page.getViewport({ scale: 1 });
+    if (!pageSizes.value[pageNumber]) {
+      pageSizes.value = { ...pageSizes.value, [pageNumber]: { width: viewport.width, height: viewport.height } };
+    }
+    const canvas = canvasRefs.get(pageNumber);
+    if (!canvas) return;
     const outputScale = window.devicePixelRatio || 1;
     const layoutViewport = page.getViewport({ scale: scale.value });
     const renderViewport = page.getViewport({ scale: scale.value * outputScale });
@@ -1806,29 +1943,82 @@ const renderAllPages = async (tokenId = pdfLoadToken.value) => {
     canvas.style.width = `${layoutViewport.width}px`;
     canvas.style.height = `${layoutViewport.height}px`;
     const context = canvas.getContext('2d');
-    if (!context) continue;
+    if (!context) return;
     await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    renderedPages.add(pageNumber);
+  } finally {
+    renderingPages.delete(pageNumber);
+  }
+};
+
+const renderThumbnail = async (
+  pageNumber: number,
+  tokenId = pdfLoadToken.value,
+  version = thumbRenderVersion.value,
+) => {
+  const pdf = pdfDoc.value;
+  if (!pdf) return;
+  if (renderingThumbPages.has(pageNumber)) return;
+  if (renderedThumbPages.has(pageNumber) && version === thumbRenderVersion.value) return;
+  renderingThumbPages.add(pageNumber);
+  try {
+    const page = await pdf.getPage(pageNumber);
+    if (tokenId !== pdfLoadToken.value || version !== thumbRenderVersion.value) return;
+    const viewport = page.getViewport({ scale: 1 });
+    if (!pageSizes.value[pageNumber]) {
+      pageSizes.value = { ...pageSizes.value, [pageNumber]: { width: viewport.width, height: viewport.height } };
+    }
+    const outputScale = window.devicePixelRatio || 1;
+    const layoutViewport = page.getViewport({ scale: thumbScale });
+    const renderViewport = page.getViewport({ scale: thumbScale * outputScale });
+    const canvas = thumbRefs.get(pageNumber);
+    if (!canvas) return;
+    canvas.width = renderViewport.width;
+    canvas.height = renderViewport.height;
+    canvas.style.width = `${layoutViewport.width}px`;
+    canvas.style.height = `${layoutViewport.height}px`;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    renderedThumbPages.add(pageNumber);
+  } finally {
+    renderingThumbPages.delete(pageNumber);
+  }
+};
+
+const ensureVisibleSeed = () => {
+  if (!visiblePages.size && pageCount.value > 0) {
+    const count = Math.min(2, pageCount.value);
+    for (let i = 1; i <= count; i += 1) {
+      visiblePages.add(i);
+    }
+  }
+};
+
+const ensureThumbSeed = () => {
+  if (!visibleThumbPages.size && pageCount.value > 0) {
+    const count = Math.min(4, pageCount.value);
+    for (let i = 1; i <= count; i += 1) {
+      visibleThumbPages.add(i);
+    }
+  }
+};
+
+const renderAllPages = async (tokenId = pdfLoadToken.value) => {
+  ensureVisibleSeed();
+  const pages = Array.from(visiblePages).sort((a, b) => a - b);
+  for (const pageNumber of pages) {
+    if (tokenId !== pdfLoadToken.value) return;
+    await renderPage(pageNumber, tokenId, renderVersion.value);
   }
 };
 
 const renderThumbnails = async (tokenId = pdfLoadToken.value) => {
-  const pdf = pdfDoc.value;
-  if (!pdf) return;
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+  ensureThumbSeed();
+  const pages = Array.from(visibleThumbPages).sort((a, b) => a - b);
+  for (const pageNumber of pages) {
     if (tokenId !== pdfLoadToken.value) return;
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: 0.2 });
-    const canvas = thumbRefs.get(pageNumber);
-    if (!canvas) continue;
-    const outputScale = window.devicePixelRatio || 1;
-    const renderViewport = page.getViewport({ scale: 0.2 * outputScale });
-    canvas.width = renderViewport.width;
-    canvas.height = renderViewport.height;
-    canvas.style.width = `${viewport.width}px`;
-    canvas.style.height = `${viewport.height}px`;
-    const context = canvas.getContext('2d');
-    if (!context) continue;
-    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    await renderThumbnail(pageNumber, tokenId, thumbRenderVersion.value);
   }
 };
 
@@ -1846,18 +2036,85 @@ const enqueueRenderThumbnails = (tokenId = pdfLoadToken.value) => {
   return renderThumbsQueue;
 };
 
+const scheduleRenderVisiblePages = () => {
+  if (renderDebounceTimer) window.clearTimeout(renderDebounceTimer);
+  renderDebounceTimer = window.setTimeout(() => {
+    renderDebounceTimer = null;
+    void enqueueRenderAllPages();
+  }, 120);
+};
+
+const scheduleRenderVisibleThumbs = () => {
+  if (thumbDebounceTimer) window.clearTimeout(thumbDebounceTimer);
+  thumbDebounceTimer = window.setTimeout(() => {
+    thumbDebounceTimer = null;
+    void enqueueRenderThumbnails();
+  }, 200);
+};
+
+const setupPageObserver = () => {
+  if (!viewerRef.value) return;
+  pageObserver?.disconnect();
+  visiblePages.clear();
+  pageObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const page = Number((entry.target as HTMLElement).dataset.page);
+        if (!Number.isFinite(page)) return;
+        if (entry.isIntersecting) {
+          visiblePages.add(page);
+        } else {
+          visiblePages.delete(page);
+        }
+      });
+      scheduleRenderVisiblePages();
+    },
+    { root: viewerRef.value, rootMargin: '400px 0px', threshold: 0.1 },
+  );
+  pageRefs.forEach((el, page) => {
+    el.dataset.page = String(page);
+    pageObserver?.observe(el);
+  });
+};
+
+const setupThumbObserver = () => {
+  if (!thumbListRef.value) return;
+  thumbObserver?.disconnect();
+  visibleThumbPages.clear();
+  thumbObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const page = Number((entry.target as HTMLElement).dataset.thumb);
+        if (!Number.isFinite(page)) return;
+        if (entry.isIntersecting) {
+          visibleThumbPages.add(page);
+        } else {
+          visibleThumbPages.delete(page);
+        }
+      });
+      scheduleRenderVisibleThumbs();
+    },
+    { root: thumbListRef.value, rootMargin: '300px 0px', threshold: 0.1 },
+  );
+  thumbRefs.forEach((el, page) => {
+    el.dataset.thumb = String(page);
+    thumbObserver?.observe(el);
+  });
+};
+
 const zoomIn = async () => {
   scale.value = Math.min(2, scale.value + 0.1);
-  await enqueueRenderAllPages();
 };
 
 const zoomOut = async () => {
   scale.value = Math.max(0.6, scale.value - 0.1);
-  await enqueueRenderAllPages();
 };
 
 watch(scale, () => {
-  void enqueueRenderAllPages();
+  renderVersion.value += 1;
+  renderedPages.clear();
+  updateCanvasLayout();
+  scheduleRenderVisiblePages();
 });
 
 watch(signatureMode, () => {
@@ -1881,12 +2138,23 @@ watch(placements, () => persistPlacements(), { deep: true });
 
 onMounted(async () => {
   await loadSession();
+  loadSignatureFonts();
   requestAnimationFrame(() => resizeCanvas());
   window.addEventListener('resize', resizeCanvas);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCanvas);
+  pageObserver?.disconnect();
+  thumbObserver?.disconnect();
+  if (renderDebounceTimer) {
+    window.clearTimeout(renderDebounceTimer);
+    renderDebounceTimer = null;
+  }
+  if (thumbDebounceTimer) {
+    window.clearTimeout(thumbDebounceTimer);
+    thumbDebounceTimer = null;
+  }
   pdfLoadToken.value += 1;
   pdfDoc.value?.destroy();
   pdfDoc.value = null;
@@ -1995,6 +2263,7 @@ onBeforeUnmount(() => {
   font-size: 0.82rem;
   cursor: pointer;
   text-align: left;
+  color: #f8fafc;
 }
 
 .palette-item:last-child {
@@ -2009,7 +2278,7 @@ onBeforeUnmount(() => {
 .palette-icon {
   width: 16px;
   height: 16px;
-  stroke: var(--muted);
+  stroke: currentColor;
   fill: none;
   stroke-width: 1.8;
   stroke-linecap: round;
@@ -2017,12 +2286,12 @@ onBeforeUnmount(() => {
 }
 
 .palette-item:hover .palette-icon {
-  stroke: var(--accent);
+  stroke: currentColor;
 }
 
 .palette-label {
   font-weight: 500;
-  color: var(--ink);
+  color: currentColor;
 }
 
 .delete-zone {
@@ -2288,7 +2557,7 @@ onBeforeUnmount(() => {
 
 .field-label {
   font-weight: 600;
-  color: var(--ink-strong);
+  color: #0b0b0b;
   z-index: 1;
 }
 
@@ -2333,18 +2602,18 @@ onBeforeUnmount(() => {
   font-family: Helvetica, Arial, sans-serif;
   font-size: 1rem;
   font-weight: 700;
-  color: var(--ink-strong);
+  color: #0b0b0b;
 }
 
 .field-value {
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--ink-strong);
+  color: #0b0b0b;
 }
 
 .field-placeholder {
   font-size: 0.72rem;
-  color: var(--muted);
+  color: #0b0b0b;
 }
 
 .field-form {
@@ -2553,6 +2822,42 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.signature-style-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.signature-style {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.4rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.signature-style.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.style-preview {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #0b0b0b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.style-label {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .link-btn {

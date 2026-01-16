@@ -93,6 +93,11 @@ export async function deleteField(documentId: string, fieldId: string) {
   return response.data;
 }
 
+export async function deleteDocument(documentId: string) {
+  const response = await apiClient.delete<{ deleted: boolean }>(`/documents/${documentId}`);
+  return response.data;
+}
+
 export async function sendDocument(
   documentId: string,
   payload: {

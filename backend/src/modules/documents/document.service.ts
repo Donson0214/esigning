@@ -1,7 +1,7 @@
 import { DocumentStatus, FieldStatus, FieldType, SignerStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
-import { createSignedUrl, uploadBufferToSupabase } from '../../utils/supabase.util';
+import { createSignedUrl, deleteStoredFile, uploadBufferToSupabase } from '../../utils/supabase.util';
 import { hashBuffer } from '../../utils/hash.util';
 import { createHttpError } from '../../utils/http-error.util';
 import { generateToken, hashToken } from '../../utils/crypto.util';
@@ -974,6 +974,63 @@ export async function deleteField(params: {
       data: { auditEventId: auditEvent.id, eventType: auditEvent.eventType },
     }),
   );
+
+  return { deleted: true };
+}
+
+export async function deleteDocument(params: {
+  ownerId: string;
+  documentId: string;
+  meta: RequestMeta;
+}) {
+  const document = await prisma.document.findFirst({
+    where: { id: params.documentId, ownerId: params.ownerId },
+    select: {
+      id: true,
+      fileUrl: true,
+      filePublicId: true,
+      signedFileUrl: true,
+      signedFilePublicId: true,
+    },
+  });
+  if (!document) {
+    throw createHttpError(404, 'DOCUMENT_NOT_FOUND', 'Document not found');
+  }
+
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.signature.deleteMany({ where: { documentId: document.id } });
+    await tx.signingSession.deleteMany({ where: { documentId: document.id } });
+    await tx.signatureField.deleteMany({ where: { documentId: document.id } });
+    await tx.auditEvent.deleteMany({ where: { documentId: document.id } });
+    await tx.documentEvent.deleteMany({ where: { documentId: document.id } });
+    await tx.certificate.deleteMany({ where: { documentId: document.id } });
+    await tx.signer.deleteMany({ where: { documentId: document.id } });
+    await tx.notification.deleteMany({ where: { docId: document.id } });
+    await tx.document.delete({ where: { id: document.id } });
+  });
+
+  const paths = new Set<string>();
+  const filePath = document.filePublicId || document.fileUrl;
+  const signedPath = document.signedFilePublicId || document.signedFileUrl;
+  if (filePath) paths.add(filePath);
+  if (signedPath) paths.add(signedPath);
+
+  for (const path of paths) {
+    try {
+      await deleteStoredFile(path);
+    } catch (err) {
+      console.warn('Failed to delete stored file', path, err);
+    }
+  }
+
+  const deletedEvent = createEvent({
+    event: 'doc.deleted',
+    orgId: params.ownerId,
+    actor: { userId: params.ownerId, role: 'SENDER' },
+    correlationId: params.meta.correlationId,
+    data: { documentId: document.id },
+  });
+  await emitEvent(deletedEvent, 'org');
 
   return { deleted: true };
 }

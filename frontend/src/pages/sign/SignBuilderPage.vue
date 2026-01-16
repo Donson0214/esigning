@@ -87,14 +87,14 @@
                     </span>
                     Document
                   </div>
+                  
                   <label class="field-label">
                     Document name
                     <input
-                      v-model="documentTitle"
+                      v-model.trim="documentTitle"
                       class="input"
                       type="text"
-                      :readonly="Boolean(doc)"
-                      placeholder="e.g. Service Agreement"
+                      placeholder="Document name"
                     />
                   </label>
                   <label class="field-label">
@@ -111,16 +111,18 @@
                       </svg>
                     </div>
                   </label>
-                  <label class="upload-btn upload-block">
+                  <label :class="['upload-btn upload-block', uploadingDocument && 'is-loading']">
                     <input
                       ref="uploadInput"
                       type="file"
                       accept=".pdf"
                       @change="handleUpload"
+                      :disabled="uploadingDocument"
                     />
-                    Upload PDF
+                    <span v-if="uploadingDocument" class="upload-spinner" aria-hidden="true"></span>
+                    <span>{{ uploadingDocument ? 'Uploading...' : 'Upload PDF' }}</span>
                   </label>
-                  <p class="helper">PDF files only.</p>
+                  
                 </div>
 
                 <div v-if="signingIntent === 'send'" class="panel-section">
@@ -133,42 +135,10 @@
                         <path d="M13.5 20a5.5 5.5 0 0 1 8.5 0" />
                       </svg>
                     </span>
-                    Recipients
+                    
                   </div>
-                  <div class="signer-list">
-                    <div v-for="signer in signerInputs" :key="signer.email" class="signer-row">
-                      <div>
-                        <p class="signer-name">{{ signer.isSender ? 'You' : signer.name || signer.email }}</p>
-                        <p class="signer-email">{{ signer.email }}</p>
-                      </div>
-                      <button
-                        v-if="!signer.isSender"
-                        class="icon-btn"
-                        type="button"
-                        @click="removeSigner(signer.email)"
-                      >
-                        x
-                      </button>
-                    </div>
-                  </div>
-                  <div class="signer-form">
-                    <input
-                      v-model="newSignerName"
-                      class="input"
-                      type="text"
-                      placeholder="Recipient full name"
-                      @input="signerError = ''"
-                    />
-                    <input
-                      v-model="newSignerEmail"
-                      class="input"
-                      type="email"
-                      placeholder="Recipient Gmail"
-                      @input="signerError = ''"
-                    />
-                    <button class="btn btn-outline" type="button" @click="addSigner">Add signer</button>
-                    <p v-if="signerError" class="builder-error">{{ signerError }}</p>
-                  </div>
+                  
+                  
                 </div>
 
                 <div v-else class="panel-section">
@@ -191,24 +161,7 @@
                 </div>
               </div>
 
-              <div v-if="doc" class="summary-card">
-                <h4>
-                  <span class="panel-icon">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M12 10v6" />
-                      <path d="M12 7h.01" />
-                    </svg>
-                  </span>
-                  Selected document
-                </h4>
-                <p class="summary-title">{{ doc.title }}</p>
-                <p class="summary-sub">{{ signerSummary }}</p>
-                <div class="summary-tags">
-                  <span class="tag">{{ doc.status }}</span>
-                  <span class="tag">{{ pageCount }} pages</span>
-                </div>
-              </div>
+              
             </div>
           </div>
         </aside>
@@ -225,13 +178,9 @@
           </div>
         </div>
         <div class="right-actions">
-          <div class="status-pill" :class="statusClass">
-            {{ doc?.status ?? 'No document' }}
-          </div>
-          <button class="btn btn-outline" type="button" @click="saveDraft" :disabled="!doc || savingDraft">
-            {{ savingDraft ? 'Saving...' : 'Save' }}
-          </button>
-          <button class="btn btn-outline" type="button" disabled>Detect fields</button>
+         
+         
+          
           
           <button
             v-if="signingIntent === 'send'"
@@ -257,12 +206,20 @@
         Preview only for this file type. Convert to PDF to place fields and send for signing.
       </p>
         <p v-if="builderError" class="builder-error">{{ builderError }}</p>
-        <p v-if="builderNotice" class="builder-success">{{ builderNotice }}</p>
+      <div v-if="isProcessing" class="builder-loading" aria-live="polite" aria-busy="true">
+        <div class="loading-card">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <div>
+            <p class="loading-title">{{ loadingTitle }}</p>
+            <p v-if="loadingDetail" class="loading-sub">{{ loadingDetail }}</p>
+          </div>
+        </div>
+      </div>
 
       <div :class="['builder-body', !isPdfPreview && 'builder-body--compact']">
         <aside v-if="isPdfPreview" class="left-panel">
           <div class="panel-title">Pages</div>
-          <div class="thumb-list">
+          <div class="thumb-list" ref="thumbListRef">
             <button
               v-for="page in pageCount"
               :key="page"
@@ -414,14 +371,6 @@
           <div class="panel-section" v-if="activeField">
             <div class="panel-title">Field settings</div>
             <label class="field-label">
-              Label
-              <input v-model="activeFieldDraft.label" class="input" type="text" @change="persistActiveField" />
-            </label>
-            <label class="field-label">
-              Placeholder
-              <input v-model="activeFieldDraft.placeholder" class="input" type="text" @change="persistActiveField" />
-            </label>
-            <label class="field-label">
               Assigned signer
               <select v-model="activeFieldDraft.signerEmail" @change="persistActiveField">
                 <option value="">Unassigned</option>
@@ -434,9 +383,14 @@
               <input v-model="activeFieldDraft.required" type="checkbox" @change="persistActiveField" />
               Required
             </label>
-            <button class="btn btn-outline danger" type="button" @click="deleteActiveField">
-              Delete field
-            </button>
+          </div>
+
+          <div
+            class="panel-section delete-zone"
+            ref="deleteZoneRef"
+            :class="isDeleteZoneActive && 'active'"
+          >
+            <div class="delete-label">Drag here to delete</div>
           </div>
         </aside>
       </div>
@@ -668,8 +622,9 @@ import { useRouter } from 'vue-router';
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from 'pdfjs-dist';
 import { useAuthProfile } from '@/features/auth/useAuthProfile';
 import { useDocuments } from '@/features/documents/composables';
+import { useNotifications } from '@/features/notifications/useNotifications';
 import { createField, deleteField, getDocument as fetchDocument, sendDocument, updateField, uploadDocument } from '@/features/documents/api';
-import { applySignature, createSigningSession, submitManifest, uploadSignature } from '@/features/signing/api';
+import { completeSigning } from '@/features/signing/api';
 import { apiClient } from '@/shared/lib/axios';
 import { createId } from '@/shared/lib/ids';
 import type { Document, DocumentField } from '@/features/documents/types';
@@ -680,6 +635,7 @@ type SignerInput = { name?: string; email: string; isSender?: boolean };
 
 const router = useRouter();
 const { documents, refresh } = useDocuments();
+const { setToastSuppressed } = useNotifications();
 const { displayName, email, initials } = useAuthProfile();
 
 const selectedDocId = ref('');
@@ -690,6 +646,7 @@ const newSignerName = ref('');
 const newSignerEmail = ref('');
 const documentTitle = ref('');
 const uploadInput = ref<HTMLInputElement | null>(null);
+const uploadingDocument = ref(false);
 const workflowStep = ref<0 | 1 | 2>(0);
 const signingIntent = ref<'send' | 'self' | null>(null);
 const setupError = ref('');
@@ -697,7 +654,10 @@ const builderError = ref('');
 const builderNotice = ref('');
 const signerError = ref('');
 const savingDraft = ref(false);
-const signingNow = ref(false);
+const actionState = ref<'idle' | 'saving' | 'sending' | 'signing' | 'redirecting' | 'error'>('idle');
+const signingNow = computed(() =>
+  actionState.value === 'sending' || actionState.value === 'signing' || actionState.value === 'redirecting',
+);
 const senderEmail = computed(() => email.value.trim().toLowerCase());
 const senderName = computed(() => displayName.value || email.value || 'You');
 const senderSigner = computed(() => signerInputs.value.find((signer) => signer.isSender));
@@ -705,9 +665,9 @@ const recipientSigners = computed(() => signerInputs.value.filter((signer) => !s
 let builderNoticeTimer: number | null = null;
 
 const steps = [
-  { key: 'mode', label: 'Choose mode' },
-  { key: 'details', label: 'Details' },
-  { key: 'build', label: 'Preview & fields' },
+  { key: 'mode',  },
+  { key: 'details', },
+  { key: 'build', },
 ];
 
 const pdfDoc = shallowRef<PDFDocumentProxy | null>(null);
@@ -715,6 +675,7 @@ const scale = ref(1);
 const pageCount = ref(0);
 const pageSizes = ref<Record<number, { width: number; height: number }>>({});
 const viewerRef = ref<HTMLDivElement | null>(null);
+const thumbListRef = ref<HTMLDivElement | null>(null);
 const pageRefs = new Map<number, HTMLDivElement>();
 const canvasRefs = new Map<number, HTMLCanvasElement>();
 const thumbRefs = new Map<number, HTMLCanvasElement>();
@@ -736,15 +697,27 @@ const pdfLoadToken = ref(0);
 const textLoadToken = ref(0);
 let renderAllPagesQueue: Promise<void> = Promise.resolve();
 let renderThumbnailsQueue: Promise<void> = Promise.resolve();
+let renderDebounceTimer: number | null = null;
+let thumbDebounceTimer: number | null = null;
+const renderedPages = new Set<number>();
+const renderingPages = new Set<number>();
+const visiblePages = new Set<number>();
+const renderedThumbPages = new Set<number>();
+const renderingThumbPages = new Set<number>();
+const visibleThumbPages = new Set<number>();
+const renderVersion = ref(0);
+const thumbRenderVersion = ref(0);
+let pageObserver: IntersectionObserver | null = null;
+let thumbObserver: IntersectionObserver | null = null;
 
 type SignatureMode = 'draw' | 'type' | 'upload';
 type SignatureStyle = { id: string; label: string; font: string };
 
 const signatureStyles: SignatureStyle[] = [
-  { id: 'classic', label: 'Classic', font: '"Segoe Script", "Lucida Handwriting", cursive' },
-  { id: 'modern', label: 'Modern', font: '"Trebuchet MS", "Lucida Sans Unicode", sans-serif' },
-  { id: 'heritage', label: 'Heritage', font: '"Palatino Linotype", "Book Antiqua", serif' },
-  { id: 'bold', label: 'Bold', font: '"Franklin Gothic Medium", "Arial Black", sans-serif' },
+  { id: 'classic', label: 'Classic', font: '"Segoe Script", "Great Vibes", "Allura", cursive' },
+  { id: 'modern', label: 'Modern', font: '"Gabriola", "Satisfy", "Segoe Print", cursive' },
+  { id: 'heritage', label: 'Heritage', font: '"Lucida Handwriting", "Allura", "Segoe Script", cursive' },
+  { id: 'bold', label: 'Bold', font: '"Segoe Print", "Pacifico", "Brush Script MT", cursive' },
 ];
 
 const signatureModalOpen = ref(false);
@@ -761,6 +734,13 @@ const signatureError = ref('');
 let signatureContext: CanvasRenderingContext2D | null = null;
 let activeSignatureStroke: Array<{ x: number; y: number }> | null = null;
 
+const loadSignatureFonts = () => {
+  if (typeof document === 'undefined' || !('fonts' in document)) return;
+  signatureStyles.forEach((style) => {
+    void document.fonts.load(`64px ${style.font}`);
+  });
+};
+
 const fieldModalOpen = ref(false);
 const fieldValueDraft = ref('');
 const fieldDateDraft = ref('');
@@ -773,6 +753,11 @@ const fieldEditorError = ref('');
 
 const draggingPaletteType = ref<DocumentField['type'] | null>(null);
 const activePaletteType = ref<DocumentField['type'] | null>(null);
+const deleteZoneRef = ref<HTMLDivElement | null>(null);
+const isDeleteZoneActive = ref(false);
+const isFieldDragActive = ref(false);
+const lastDragEndedAt = ref(0);
+const lastDropAt = ref(0);
 
 const dragState = ref<{
   fieldId: string;
@@ -782,6 +767,9 @@ const dragState = ref<{
   originX: number;
   originY: number;
   mode: 'move' | 'resize';
+  moved: boolean;
+  deltaX: number;
+  deltaY: number;
 } | null>(null);
 
 const fieldPalette = [
@@ -826,6 +814,22 @@ const statusClass = computed(() => {
   if (status === 'DECLINED' || status === 'EXPIRED') return 'danger';
   return 'neutral';
 });
+
+const isProcessing = computed(() => signingNow.value);
+const loadingTitle = computed(() => builderNotice.value || 'Processing request...');
+const loadingDetail = computed(() => {
+  if (signingIntent.value === 'send') {
+    return 'Redirecting to documents...';
+  }
+  return 'Preparing signing session...';
+});
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  const responseMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+  if (responseMessage) return responseMessage;
+  if (error instanceof Error) return error.message;
+  return fallback;
+};
 
 const setBuilderNotice = (message: string) => {
   builderNotice.value = message;
@@ -1054,7 +1058,11 @@ const selectSigningIntent = async (intent: 'send' | 'self') => {
 };
 
 const setPageRef = (page: number) => (el: HTMLDivElement | null) => {
-  if (el) pageRefs.set(page, el);
+  if (el) {
+    pageRefs.set(page, el);
+    el.dataset.page = String(page);
+    pageObserver?.observe(el);
+  }
 };
 
 const setCanvasRef = (page: number) => (el: HTMLCanvasElement | null) => {
@@ -1062,7 +1070,11 @@ const setCanvasRef = (page: number) => (el: HTMLCanvasElement | null) => {
 };
 
 const setThumbRef = (page: number) => (el: HTMLCanvasElement | null) => {
-  if (el) thumbRefs.set(page, el);
+  if (el) {
+    thumbRefs.set(page, el);
+    el.dataset.thumb = String(page);
+    thumbObserver?.observe(el);
+  }
 };
 
 const fieldsByPage = (page: number) => fields.value.filter((field) => field.page === page);
@@ -1203,6 +1215,14 @@ const resolveSignatureArtifact = (
 const fieldStyle = (field: DocumentField, page: number) => {
   const size = pageSizes.value[page];
   if (!size) return {};
+  if (dragState.value && dragState.value.fieldId === field.id && dragState.value.mode === 'move') {
+    return {
+      top: `${dragState.value.originY + dragState.value.deltaY}px`,
+      left: `${dragState.value.originX + dragState.value.deltaX}px`,
+      width: `${field.width * scale.value}px`,
+      height: `${field.height * scale.value}px`,
+    };
+  }
   const normalized = resolveNormalizedRect(field, size);
   const width = size.width * scale.value;
   const height = size.height * scale.value;
@@ -1227,6 +1247,7 @@ const selectField = (id: string) => {
 };
 
 const handleFieldClick = (field: DocumentField) => {
+  if (isFieldDragActive.value || Date.now() - lastDragEndedAt.value < 200) return;
   selectField(field.id);
   if (signingIntent.value === 'self') return;
   if (isSignatureField(field)) {
@@ -1279,9 +1300,28 @@ const persistActiveField = async () => {
 const deleteActiveField = async () => {
   const field = activeField.value;
   if (!doc.value || !field) return;
-  await deleteField(doc.value.id, field.id);
-  fields.value = fields.value.filter((item) => item.id !== field.id);
-  activeFieldId.value = null;
+  try {
+    await deleteField(doc.value.id, field.id);
+    fields.value = fields.value.filter((item) => item.id !== field.id);
+    activeFieldId.value = null;
+  } catch (error) {
+    builderError.value = getApiErrorMessage(error, 'Unable to delete field.');
+  }
+};
+
+const deleteFieldById = async (fieldId: string) => {
+  if (!doc.value) return;
+  const field = fields.value.find((item) => item.id === fieldId);
+  if (!field) return;
+  try {
+    await deleteField(doc.value.id, fieldId);
+    fields.value = fields.value.filter((item) => item.id !== fieldId);
+    if (activeFieldId.value === fieldId) {
+      activeFieldId.value = null;
+    }
+  } catch (error) {
+    builderError.value = getApiErrorMessage(error, 'Unable to delete field.');
+  }
 };
 
 const resetSignatureEditor = () => {
@@ -1319,6 +1359,7 @@ const openSignatureModal = async (field: DocumentField) => {
     signatureMode.value = meta.mode;
   }
   signatureModalOpen.value = true;
+  loadSignatureFonts();
   await nextTick();
   if (signatureMode.value === 'draw') {
     resizeSignatureCanvas();
@@ -1485,7 +1526,7 @@ const buildSignatureValue = () => {
   if (signatureMode.value === 'upload') {
     return signatureImage.value;
   }
-  return typedSignature.value.trim();
+  return renderTypedSignatureDataUrl(typedSignature.value.trim(), signatureFont.value);
 };
 
 const buildSignatureOptions = (field: DocumentField) => {
@@ -1768,6 +1809,7 @@ const removeSigner = (email: string) => {
 };
 
 const handleUpload = async (event: Event) => {
+  if (uploadingDocument.value) return;
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
@@ -1778,12 +1820,19 @@ const handleUpload = async (event: Event) => {
     return;
   }
   const title = documentTitle.value.trim() || file.name.replace(/\.[^/.]+$/, '');
-  const created = await uploadDocument({ title, file });
-  selectedDocId.value = created.id;
-  documentTitle.value = created.title;
-  await loadDocument(created.id);
-  await proceedToBuilder({ allowMissingSigners: true });
-  input.value = '';
+  uploadingDocument.value = true;
+  try {
+    const created = await uploadDocument({ title, file });
+    selectedDocId.value = created.id;
+    documentTitle.value = created.title;
+    await loadDocument(created.id);
+    await proceedToBuilder({ allowMissingSigners: true });
+  } catch {
+    setupError.value = 'Unable to upload the document.';
+  } finally {
+    uploadingDocument.value = false;
+    input.value = '';
+  }
 };
 
 const handleDocChange = async () => {
@@ -1850,6 +1899,18 @@ const resetPdfPreview = () => {
   pageSizes.value = {};
   pdfError.value = '';
   pdfLoadToken.value += 1;
+  pageObserver?.disconnect();
+  thumbObserver?.disconnect();
+  pageObserver = null;
+  thumbObserver = null;
+  visiblePages.clear();
+  visibleThumbPages.clear();
+  renderedPages.clear();
+  renderedThumbPages.clear();
+  renderingPages.clear();
+  renderingThumbPages.clear();
+  renderVersion.value += 1;
+  thumbRenderVersion.value += 1;
 };
 
 const resetTextPreview = () => {
@@ -1995,8 +2056,15 @@ const loadPdf = async () => {
     pdfDoc.value = pdf;
     pageCount.value = pdf.numPages;
     pageSizes.value = {};
-    await enqueueRenderAllPages(token);
-    await enqueueRenderThumbnails(token);
+    renderedPages.clear();
+    renderedThumbPages.clear();
+    await measurePages(token);
+    await nextTick();
+    updateCanvasLayout();
+    setupPageObserver();
+    setupThumbObserver();
+    scheduleRenderVisiblePages();
+    scheduleRenderVisibleThumbs();
   } catch (err) {
     if (token !== pdfLoadToken.value) return;
     pdfDoc.value?.destroy();
@@ -2007,16 +2075,65 @@ const loadPdf = async () => {
   }
 };
 
-const renderAllPages = async (token = pdfLoadToken.value) => {
+const thumbScale = 0.2;
+
+const measurePages = async (token = pdfLoadToken.value) => {
   const pdf = pdfDoc.value;
   if (!pdf) return;
+  const sizes: Record<number, { width: number; height: number }> = {};
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     if (token !== pdfLoadToken.value) return;
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1 });
-    pageSizes.value = { ...pageSizes.value, [pageNumber]: { width: viewport.width, height: viewport.height } };
+    sizes[pageNumber] = { width: viewport.width, height: viewport.height };
+  }
+  pageSizes.value = sizes;
+  updateCanvasLayout();
+};
+
+const updateCanvasLayout = () => {
+  Object.entries(pageSizes.value).forEach(([pageKey, size]) => {
+    const pageNumber = Number(pageKey);
     const canvas = canvasRefs.get(pageNumber);
-    if (!canvas) continue;
+    if (canvas) {
+      canvas.style.width = `${size.width * scale.value}px`;
+      canvas.style.height = `${size.height * scale.value}px`;
+      if (!renderedPages.has(pageNumber) && canvas.width === 0 && canvas.height === 0) {
+        canvas.width = 1;
+        canvas.height = 1;
+      }
+    }
+    const thumbCanvas = thumbRefs.get(pageNumber);
+    if (thumbCanvas) {
+      thumbCanvas.style.width = `${size.width * thumbScale}px`;
+      thumbCanvas.style.height = `${size.height * thumbScale}px`;
+      if (!renderedThumbPages.has(pageNumber) && thumbCanvas.width === 0 && thumbCanvas.height === 0) {
+        thumbCanvas.width = 1;
+        thumbCanvas.height = 1;
+      }
+    }
+  });
+};
+
+const renderPage = async (
+  pageNumber: number,
+  token = pdfLoadToken.value,
+  version = renderVersion.value,
+) => {
+  const pdf = pdfDoc.value;
+  if (!pdf) return;
+  if (renderingPages.has(pageNumber)) return;
+  if (renderedPages.has(pageNumber) && version === renderVersion.value) return;
+  renderingPages.add(pageNumber);
+  try {
+    const page = await pdf.getPage(pageNumber);
+    if (token !== pdfLoadToken.value || version !== renderVersion.value) return;
+    const viewport = page.getViewport({ scale: 1 });
+    if (!pageSizes.value[pageNumber]) {
+      pageSizes.value = { ...pageSizes.value, [pageNumber]: { width: viewport.width, height: viewport.height } };
+    }
+    const canvas = canvasRefs.get(pageNumber);
+    if (!canvas) return;
     const outputScale = window.devicePixelRatio || 1;
     const layoutViewport = page.getViewport({ scale: scale.value });
     const renderViewport = page.getViewport({ scale: scale.value * outputScale });
@@ -2025,29 +2142,82 @@ const renderAllPages = async (token = pdfLoadToken.value) => {
     canvas.style.width = `${layoutViewport.width}px`;
     canvas.style.height = `${layoutViewport.height}px`;
     const context = canvas.getContext('2d');
-    if (!context) continue;
+    if (!context) return;
     await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    renderedPages.add(pageNumber);
+  } finally {
+    renderingPages.delete(pageNumber);
+  }
+};
+
+const renderThumbnail = async (
+  pageNumber: number,
+  token = pdfLoadToken.value,
+  version = thumbRenderVersion.value,
+) => {
+  const pdf = pdfDoc.value;
+  if (!pdf) return;
+  if (renderingThumbPages.has(pageNumber)) return;
+  if (renderedThumbPages.has(pageNumber) && version === thumbRenderVersion.value) return;
+  renderingThumbPages.add(pageNumber);
+  try {
+    const page = await pdf.getPage(pageNumber);
+    if (token !== pdfLoadToken.value || version !== thumbRenderVersion.value) return;
+    const viewport = page.getViewport({ scale: 1 });
+    if (!pageSizes.value[pageNumber]) {
+      pageSizes.value = { ...pageSizes.value, [pageNumber]: { width: viewport.width, height: viewport.height } };
+    }
+    const outputScale = window.devicePixelRatio || 1;
+    const layoutViewport = page.getViewport({ scale: thumbScale });
+    const renderViewport = page.getViewport({ scale: thumbScale * outputScale });
+    const canvas = thumbRefs.get(pageNumber);
+    if (!canvas) return;
+    canvas.width = renderViewport.width;
+    canvas.height = renderViewport.height;
+    canvas.style.width = `${layoutViewport.width}px`;
+    canvas.style.height = `${layoutViewport.height}px`;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    renderedThumbPages.add(pageNumber);
+  } finally {
+    renderingThumbPages.delete(pageNumber);
+  }
+};
+
+const ensureVisibleSeed = () => {
+  if (!visiblePages.size && pageCount.value > 0) {
+    const count = Math.min(2, pageCount.value);
+    for (let i = 1; i <= count; i += 1) {
+      visiblePages.add(i);
+    }
+  }
+};
+
+const ensureThumbSeed = () => {
+  if (!visibleThumbPages.size && pageCount.value > 0) {
+    const count = Math.min(4, pageCount.value);
+    for (let i = 1; i <= count; i += 1) {
+      visibleThumbPages.add(i);
+    }
+  }
+};
+
+const renderAllPages = async (token = pdfLoadToken.value) => {
+  ensureVisibleSeed();
+  const pages = Array.from(visiblePages).sort((a, b) => a - b);
+  for (const pageNumber of pages) {
+    if (token !== pdfLoadToken.value) return;
+    await renderPage(pageNumber, token, renderVersion.value);
   }
 };
 
 const renderThumbnails = async (token = pdfLoadToken.value) => {
-  const pdf = pdfDoc.value;
-  if (!pdf) return;
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+  ensureThumbSeed();
+  const pages = Array.from(visibleThumbPages).sort((a, b) => a - b);
+  for (const pageNumber of pages) {
     if (token !== pdfLoadToken.value) return;
-    const page = await pdf.getPage(pageNumber);
-    const outputScale = window.devicePixelRatio || 1;
-    const viewport = page.getViewport({ scale: 0.2 });
-    const renderViewport = page.getViewport({ scale: 0.2 * outputScale });
-    const canvas = thumbRefs.get(pageNumber);
-    if (!canvas) continue;
-    canvas.width = renderViewport.width;
-    canvas.height = renderViewport.height;
-    canvas.style.width = `${viewport.width}px`;
-    canvas.style.height = `${viewport.height}px`;
-    const context = canvas.getContext('2d');
-    if (!context) continue;
-    await page.render({ canvasContext: context, viewport: renderViewport }).promise;
+    await renderThumbnail(pageNumber, token, thumbRenderVersion.value);
   }
 };
 
@@ -2065,14 +2235,78 @@ const enqueueRenderThumbnails = (token = pdfLoadToken.value) => {
   return renderThumbnailsQueue;
 };
 
+const scheduleRenderVisiblePages = () => {
+  if (renderDebounceTimer) window.clearTimeout(renderDebounceTimer);
+  renderDebounceTimer = window.setTimeout(() => {
+    renderDebounceTimer = null;
+    void enqueueRenderAllPages();
+  }, 120);
+};
+
+const scheduleRenderVisibleThumbs = () => {
+  if (thumbDebounceTimer) window.clearTimeout(thumbDebounceTimer);
+  thumbDebounceTimer = window.setTimeout(() => {
+    thumbDebounceTimer = null;
+    void enqueueRenderThumbnails();
+  }, 200);
+};
+
+const setupPageObserver = () => {
+  if (!viewerRef.value) return;
+  pageObserver?.disconnect();
+  visiblePages.clear();
+  pageObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const page = Number((entry.target as HTMLElement).dataset.page);
+        if (!Number.isFinite(page)) return;
+        if (entry.isIntersecting) {
+          visiblePages.add(page);
+        } else {
+          visiblePages.delete(page);
+        }
+      });
+      scheduleRenderVisiblePages();
+    },
+    { root: viewerRef.value, rootMargin: '400px 0px', threshold: 0.1 },
+  );
+  pageRefs.forEach((el, page) => {
+    el.dataset.page = String(page);
+    pageObserver?.observe(el);
+  });
+};
+
+const setupThumbObserver = () => {
+  if (!thumbListRef.value) return;
+  thumbObserver?.disconnect();
+  visibleThumbPages.clear();
+  thumbObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const page = Number((entry.target as HTMLElement).dataset.thumb);
+        if (!Number.isFinite(page)) return;
+        if (entry.isIntersecting) {
+          visibleThumbPages.add(page);
+        } else {
+          visibleThumbPages.delete(page);
+        }
+      });
+      scheduleRenderVisibleThumbs();
+    },
+    { root: thumbListRef.value, rootMargin: '300px 0px', threshold: 0.1 },
+  );
+  thumbRefs.forEach((el, page) => {
+    el.dataset.thumb = String(page);
+    thumbObserver?.observe(el);
+  });
+};
+
 const zoomIn = async () => {
   scale.value = Math.min(2, scale.value + 0.1);
-  await enqueueRenderAllPages();
 };
 
 const zoomOut = async () => {
   scale.value = Math.max(0.6, scale.value - 0.1);
-  await enqueueRenderAllPages();
 };
 
 const scrollToPage = (page: number) => {
@@ -2096,9 +2330,11 @@ const handleDrop = async (event: DragEvent, page: number) => {
   if (!type || !doc.value || !isPdfPreview.value) return;
   await createFieldAtPosition(type, event.clientX, event.clientY, page);
   draggingPaletteType.value = null;
+  lastDropAt.value = Date.now();
 };
 
 const handlePageClick = async (event: MouseEvent, page: number) => {
+  if (Date.now() - lastDropAt.value < 200) return;
   if (!activePaletteType.value || !doc.value || !isPdfPreview.value) return;
   await createFieldAtPosition(activePaletteType.value, event.clientX, event.clientY, page);
   activePaletteType.value = null;
@@ -2142,14 +2378,21 @@ const createFieldAtPosition = async (type: DocumentField['type'], clientX: numbe
     status: 'EMPTY',
   };
   fields.value = [...fields.value, optimisticField];
-  const created = await createField(doc.value.id, payload);
-  fields.value = fields.value.map((field) => (field.id === tempId ? { ...field, ...created } : field));
+  try {
+    const created = await createField(doc.value.id, payload);
+    fields.value = fields.value.map((field) => (field.id === tempId ? { ...field, ...created } : field));
+  } catch (error) {
+    fields.value = fields.value.filter((field) => field.id !== tempId);
+    builderError.value = getApiErrorMessage(error, 'Unable to add field.');
+  }
 };
 
 const startDrag = (event: PointerEvent, field: DocumentField, page: number) => {
   const pageEl = pageRefs.get(page);
   const size = pageSizes.value[page];
   if (!pageEl || !size) return;
+  isDeleteZoneActive.value = false;
+  isFieldDragActive.value = false;
   const rect = pageEl.getBoundingClientRect();
   const left = field.x * scale.value;
   const top = (size.height - field.y - field.height) * scale.value;
@@ -2161,11 +2404,16 @@ const startDrag = (event: PointerEvent, field: DocumentField, page: number) => {
     originX: left,
     originY: top,
     mode: 'move',
+    moved: false,
+    deltaX: 0,
+    deltaY: 0,
   };
   (event.target as HTMLElement).setPointerCapture(event.pointerId);
 };
 
 const startResize = (event: PointerEvent, field: DocumentField, page: number) => {
+  isDeleteZoneActive.value = false;
+  isFieldDragActive.value = false;
   dragState.value = {
     fieldId: field.id,
     page,
@@ -2174,32 +2422,47 @@ const startResize = (event: PointerEvent, field: DocumentField, page: number) =>
     originX: field.width,
     originY: field.height,
     mode: 'resize',
+    moved: false,
+    deltaX: 0,
+    deltaY: 0,
   };
   (event.target as HTMLElement).setPointerCapture(event.pointerId);
+};
+
+const isPointerInDeleteZone = (event: PointerEvent) => {
+  if (!deleteZoneRef.value) return false;
+  const rect = deleteZoneRef.value.getBoundingClientRect();
+  return (
+    event.clientX >= rect.left &&
+    event.clientX <= rect.right &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.bottom
+  );
 };
 
 const handlePointerMove = async (event: PointerEvent) => {
   const state = dragState.value;
   if (!state) return;
+  const deltaX = event.clientX - state.startX;
+  const deltaY = event.clientY - state.startY;
+  if (!state.moved && Math.hypot(deltaX, deltaY) > 3) {
+    state.moved = true;
+    isFieldDragActive.value = true;
+  }
+  state.deltaX = deltaX;
+  state.deltaY = deltaY;
+  if (state.mode === 'move') {
+    isDeleteZoneActive.value = isPointerInDeleteZone(event);
+  } else {
+    isDeleteZoneActive.value = false;
+  }
   const field = fields.value.find((item) => item.id === state.fieldId);
   const size = pageSizes.value[state.page];
   const pageEl = pageRefs.get(state.page);
   if (!field || !size || !pageEl) return;
   if (state.mode === 'move') {
-    const deltaX = event.clientX - state.startX;
-    const deltaY = event.clientY - state.startY;
-    const nextLeft = Math.max(0, state.originX + deltaX);
-    const nextTop = Math.max(0, state.originY + deltaY);
-    const pdfX = Math.min(size.width - field.width, nextLeft / scale.value);
-    const pdfY = Math.min(size.height - field.height, size.height - nextTop / scale.value - field.height);
-    const nextField = { ...field, x: pdfX, y: Math.max(0, pdfY) };
-    const nextOptions = buildNormalizedOptions(nextField, size);
-    fields.value = fields.value.map((item) =>
-      item.id === field.id ? { ...nextField, options: nextOptions } : item,
-    );
+    return;
   } else {
-    const deltaX = event.clientX - state.startX;
-    const deltaY = event.clientY - state.startY;
     const nextWidth = Math.max(40, state.originX + deltaX / scale.value);
     const nextHeight = Math.max(20, state.originY + deltaY / scale.value);
     const nextField = { ...field, width: nextWidth, height: nextHeight };
@@ -2210,20 +2473,50 @@ const handlePointerMove = async (event: PointerEvent) => {
   }
 };
 
-const handlePointerUp = async () => {
+const handlePointerUp = async (event: PointerEvent) => {
   const state = dragState.value;
   if (!state || !doc.value) return;
   const field = fields.value.find((item) => item.id === state.fieldId);
   const size = pageSizes.value[state.page];
+  const shouldDelete = state.mode === 'move' && isPointerInDeleteZone(event);
   dragState.value = null;
+  isDeleteZoneActive.value = false;
+  isFieldDragActive.value = false;
+  if (state.moved) {
+    lastDragEndedAt.value = Date.now();
+  }
+  if (shouldDelete) {
+    await deleteFieldById(state.fieldId);
+    return;
+  }
   if (!field) return;
-  await updateField(doc.value.id, field.id, {
-    x: field.x,
-    y: field.y,
-    width: field.width,
-    height: field.height,
-    options: size ? buildNormalizedOptions(field, size) : field.options,
-  });
+  if (!size) return;
+  let updatedField = field;
+  if (state.mode === 'move') {
+    const nextLeft = state.originX + state.deltaX;
+    const nextTop = state.originY + state.deltaY;
+    const pdfX = Math.min(size.width - field.width, Math.max(0, nextLeft / scale.value));
+    const pdfY = Math.min(
+      size.height - field.height,
+      Math.max(0, size.height - nextTop / scale.value - field.height),
+    );
+    updatedField = { ...field, x: pdfX, y: Math.max(0, pdfY) };
+    const nextOptions = buildNormalizedOptions(updatedField, size);
+    fields.value = fields.value.map((item) =>
+      item.id === field.id ? { ...updatedField, options: nextOptions } : item,
+    );
+  }
+  try {
+    await updateField(doc.value.id, field.id, {
+      x: updatedField.x,
+      y: updatedField.y,
+      width: updatedField.width,
+      height: updatedField.height,
+      options: buildNormalizedOptions(updatedField, size),
+    });
+  } catch (error) {
+    builderError.value = getApiErrorMessage(error, 'Unable to update the field position.');
+  }
 };
 
 const getDefaultFieldSize = (type: DocumentField['type']) => {
@@ -2264,7 +2557,6 @@ const saveDraft = async () => {
       );
     }
     await loadDocument(doc.value.id);
-    setBuilderNotice('Draft saved.');
   } catch {
     builderError.value = 'Unable to save draft.';
   } finally {
@@ -2316,10 +2608,18 @@ const signNowAndSend = async () => {
     return;
   }
 
-  signingNow.value = true;
+  const previousStatus = doc.value.status;
+  doc.value = { ...doc.value, status: 'IN_PROGRESS' };
+  setBuilderNotice('Sending document...');
+  actionState.value = 'signing';
   try {
     await saveDraft();
-    if (!doc.value || builderError.value) return;
+    if (!doc.value || builderError.value) {
+      if (doc.value && previousStatus) {
+        doc.value = { ...doc.value, status: previousStatus };
+      }
+      return;
+    }
 
     const orderedSigners = [
       senderSigner.value ?? { name: senderName.value, email: senderEmail.value },
@@ -2347,43 +2647,33 @@ const signNowAndSend = async () => {
       return;
     }
 
-    const correlationId = createId();
-    const session = await createSigningSession(doc.value.id, signingToken, createId(), correlationId);
     const fieldsPayload = senderFields.map((field) => ({
       fieldId: field.id,
       value: resolveSenderFieldValue(field),
     }));
 
-    await submitManifest({
+    const correlationId = createId();
+    await completeSigning({
       docId: doc.value.id,
       signingToken,
-      signingSessionId: session.data.signingSessionId,
+      clientMutationId: createId(),
       fields: fieldsPayload,
-      correlationId,
-    });
-
-    await uploadSignature({
-      docId: doc.value.id,
-      signingToken,
-      signingSessionId: session.data.signingSessionId,
-      type: signatureArtifact.type,
-      data: signatureArtifact.data,
-      correlationId,
-    });
-
-    await applySignature({
-      docId: doc.value.id,
-      signingToken,
-      signingSessionId: session.data.signingSessionId,
+      signature: signatureArtifact,
       correlationId,
     });
 
     await loadDocument(doc.value.id);
-    setBuilderNotice('Signature applied. Inviting the next signer.');
+    setBuilderNotice('Signature applied. Redirecting to documents...');
+    actionState.value = 'redirecting';
+    await router.push('/app/documents');
   } catch (err) {
     builderError.value = err instanceof Error ? err.message : 'Unable to sign and send.';
+    if (doc.value && previousStatus) {
+      doc.value = { ...doc.value, status: previousStatus };
+    }
+    actionState.value = 'error';
   } finally {
-    signingNow.value = false;
+    actionState.value = 'idle';
   }
 };
 
@@ -2407,11 +2697,29 @@ const sendForSigning = async () => {
     return;
   }
   const senderFields = getSenderFields();
+  if (signingIntent.value === 'send' && senderFields.length > 0) {
+    const senderSignatureFields = senderFields.filter(isSignatureField);
+    if (senderSignatureFields.length === 0) {
+      builderError.value = 'Add a signature or initial field assigned to you before sending.';
+      return;
+    }
+    if (senderSignatureFields.some((field) => !(field.value ?? '').trim())) {
+      builderError.value = 'Add your signature or initials to your fields before sending.';
+      return;
+    }
+    await signNowAndSend();
+    return;
+  }
   if (signingIntent.value === 'self' && fields.value.length === 0) {
     builderError.value = 'Place at least one field before sending.';
     return;
   }
   if (signingIntent.value === 'self') {
+    await saveDraft();
+    if (builderError.value) return;
+    builderNotice.value = '';
+  }
+  if (signingIntent.value === 'send' && fields.value.length > 0) {
     await saveDraft();
     if (builderError.value) return;
     builderNotice.value = '';
@@ -2425,8 +2733,11 @@ const sendForSigning = async () => {
         ...recipientSigners.value,
       ]
     : [{ name: senderName.value, email: senderEmail.value }];
-  signingNow.value = true;
+  const previousStatus = doc.value.status;
+  doc.value = { ...doc.value, status: 'SENT' };
+  actionState.value = 'sending';
   try {
+    setBuilderNotice('Sending document...');
     const response = await sendDocument(doc.value.id, {
       signers: orderedSigners.map((signer, index) => ({
         email: signer.email,
@@ -2438,15 +2749,26 @@ const sendForSigning = async () => {
     if (signingIntent.value === 'self') {
       await refresh();
     }
-    if (response.signingToken) {
+    if (response.signingToken && signingIntent.value === 'self') {
       await router.push(`/sign/${response.signingToken}`);
       return;
     }
     await loadDocument(doc.value.id);
+    if (signingIntent.value === 'send') {
+      setBuilderNotice('Document sent. Redirecting to documents...');
+      actionState.value = 'redirecting';
+      await router.push('/app/documents');
+      return;
+    }
+    setBuilderNotice('Document sent. Waiting for recipients.');
   } catch (err) {
     builderError.value = err instanceof Error ? err.message : 'Unable to send document.';
+    if (doc.value && previousStatus) {
+      doc.value = { ...doc.value, status: previousStatus };
+    }
+    actionState.value = 'error';
   } finally {
-    signingNow.value = false;
+    actionState.value = 'idle';
   }
 };
 
@@ -2470,13 +2792,19 @@ const proceedToBuilder = async (options?: { allowMissingSigners?: boolean }) => 
   builderError.value = '';
   await nextTick();
   if (pdfDoc.value) {
-    await enqueueRenderAllPages();
-    await enqueueRenderThumbnails();
+    updateCanvasLayout();
+    setupPageObserver();
+    setupThumbObserver();
+    scheduleRenderVisiblePages();
+    scheduleRenderVisibleThumbs();
   }
 };
 
 watch(scale, () => {
-  void enqueueRenderAllPages();
+  renderVersion.value += 1;
+  renderedPages.clear();
+  updateCanvasLayout();
+  scheduleRenderVisiblePages();
 });
 
 watch(signatureModalOpen, (open) => {
@@ -2515,13 +2843,26 @@ watch(workflowStep, async (step) => {
 onMounted(async () => {
   window.addEventListener('pointermove', handlePointerMove);
   window.addEventListener('pointerup', handlePointerUp);
+  loadSignatureFonts();
+  setToastSuppressed(true);
   await refresh();
 });
 
 onBeforeUnmount(() => {
+  setToastSuppressed(false);
   window.removeEventListener('pointermove', handlePointerMove);
   window.removeEventListener('pointerup', handlePointerUp);
   window.removeEventListener('resize', resizeSignatureCanvas);
+  pageObserver?.disconnect();
+  thumbObserver?.disconnect();
+  if (renderDebounceTimer) {
+    window.clearTimeout(renderDebounceTimer);
+    renderDebounceTimer = null;
+  }
+  if (thumbDebounceTimer) {
+    window.clearTimeout(thumbDebounceTimer);
+    thumbDebounceTimer = null;
+  }
   if (builderNoticeTimer) {
     window.clearTimeout(builderNoticeTimer);
     builderNoticeTimer = null;
@@ -2902,10 +3243,27 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.9rem;
   cursor: pointer;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .upload-btn input {
   display: none;
+}
+
+.upload-btn.is-loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.upload-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(51, 92, 255, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
 }
 
 .input[readonly] {
@@ -2929,6 +3287,53 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.builder-loading {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 12, 24, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 60;
+}
+
+.loading-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.2rem 1.4rem;
+  box-shadow: var(--shadow-md);
+  color: var(--ink-strong);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 3px solid rgba(51, 92, 255, 0.25);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+
+.loading-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.loading-sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .status-pill {
@@ -3103,6 +3508,7 @@ onBeforeUnmount(() => {
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  overflow: visible;
 }
 
 .pdf-canvas {
@@ -3188,6 +3594,27 @@ onBeforeUnmount(() => {
 .panel-section {
   display: grid;
   gap: 0.7rem;
+}
+
+.delete-zone {
+  margin-top: 0.4rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--muted);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.delete-zone.active {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.delete-label {
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .signer-list {

@@ -4,6 +4,7 @@ import { requireSigningToken } from '../../middlewares/signing-auth.middleware';
 import { signingRateLimit } from '../../middlewares/rate-limit.middleware';
 import {
   applySignature,
+  completeSigning,
   completeDocument,
   createSignerField,
   createSigningSession,
@@ -20,6 +21,7 @@ signingIntegrityRoutes.post('/:docId/signing-sessions', signingRateLimit, requir
 signingIntegrityRoutes.post('/:docId/fields', signingRateLimit, requireSigningToken, createSignerField);
 signingIntegrityRoutes.post('/:docId/manifest', signingRateLimit, requireSigningToken, submitManifest);
 signingIntegrityRoutes.post('/:docId/signature', signingRateLimit, requireSigningToken, uploadSignature);
+signingIntegrityRoutes.post('/:docId/complete-signing', signingRateLimit, requireSigningToken, completeSigning);
 signingIntegrityRoutes.post('/:docId/apply-signature', signingRateLimit, requireSigningToken, applySignature);
 signingIntegrityRoutes.post('/:docId/complete', requireAuth, completeDocument);
 signingIntegrityRoutes.get('/:docId/audit', requireAuth, getAuditReport);

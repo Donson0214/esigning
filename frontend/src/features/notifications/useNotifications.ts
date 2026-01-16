@@ -10,6 +10,7 @@ const notifications = ref<NotificationRecord[]>([]);
 const unreadCount = ref(0);
 const loading = ref(false);
 const initialized = ref(false);
+const toastSuppressed = ref(false);
 const knownIds = new Set<string>();
 
 const toastEventTypes = new Set([
@@ -40,7 +41,7 @@ const handleSocketEvent = (event: AnyEventEnvelope) => {
   if (event.event === 'notification.created') {
     const notification = event.data.notification as NotificationRecord;
     addNotification(notification);
-    if (toastEventTypes.has(notification.eventType)) {
+    if (!toastSuppressed.value && toastEventTypes.has(notification.eventType)) {
       const { pushToast } = useToast();
       const meta = mapNotificationMeta(notification.eventType);
       pushToast({
@@ -119,6 +120,9 @@ export const useNotifications = () => ({
   notifications: computed(() => notifications.value),
   unreadCount: computed(() => unreadCount.value),
   loading: computed(() => loading.value),
+  setToastSuppressed: (value: boolean) => {
+    toastSuppressed.value = value;
+  },
   refresh,
   initNotifications,
   markRead,

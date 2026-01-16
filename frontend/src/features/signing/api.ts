@@ -121,6 +121,37 @@ export async function applySignature(params: {
   return result;
 }
 
+export async function completeSigning(params: {
+  docId: string;
+  signingToken: string;
+  signingSessionId?: string;
+  clientMutationId?: string;
+  fields: Array<{ fieldId: string; value: string }>;
+  signature: { type: 'DRAWN' | 'TYPED' | 'UPLOADED'; data: string };
+  correlationId?: string;
+}) {
+  const result = await requestWithCorrelation<{
+    postHash: string;
+    documentVersion: number;
+    status: string;
+    signingSessionId: string;
+  }>(
+    {
+      method: 'POST',
+      url: `/docs/${params.docId}/complete-signing`,
+      headers: { 'x-signing-token': params.signingToken },
+      data: {
+        signingSessionId: params.signingSessionId,
+        clientMutationId: params.clientMutationId,
+        fields: params.fields,
+        signature: params.signature,
+      },
+    },
+    params.correlationId,
+  );
+  return result;
+}
+
 export async function createSigningField(params: {
   docId: string;
   signingToken: string;

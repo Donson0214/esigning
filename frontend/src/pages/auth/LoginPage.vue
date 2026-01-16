@@ -22,7 +22,7 @@
           </svg>
         </div>
         <div>
-          <p class="brand-title">WilsonFlow</p>
+          <p class="brand-title">Inkless</p>
           <p class="brand-sub">Enterprise E-Signature Platform</p>
         </div>
       </div>

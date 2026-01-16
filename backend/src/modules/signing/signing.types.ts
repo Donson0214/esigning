@@ -35,6 +35,24 @@ export const uploadSignatureSchema = z.object({
   data: z.string().optional().default(''),
 });
 
+export const completeSigningSchema = z.object({
+  signingSessionId: z.string().optional(),
+  clientMutationId: z.string().optional(),
+  fields: z
+    .array(
+      z.object({
+        fieldId: z.string(),
+        value: z.string().optional().default(''),
+      }),
+    )
+    .optional()
+    .default([]),
+  signature: z.object({
+    type: z.enum(['DRAWN', 'TYPED', 'UPLOADED']).optional().default('TYPED'),
+    data: z.string().optional().default(''),
+  }),
+});
+
 export const applySignatureSchema = z.object({
   signingSessionId: z.string().optional().default(''),
 });
@@ -57,5 +75,6 @@ export type SubmitSignatureInput = z.infer<typeof submitSignatureSchema>;
 export type CreateSigningSessionInput = z.infer<typeof createSigningSessionSchema>;
 export type SubmitManifestInput = z.infer<typeof submitManifestSchema>;
 export type UploadSignatureInput = z.infer<typeof uploadSignatureSchema>;
+export type CompleteSigningInput = z.infer<typeof completeSigningSchema>;
 export type ApplySignatureInput = z.infer<typeof applySignatureSchema>;
 export type CreateSignerFieldInput = z.infer<typeof createSignerFieldSchema>;

@@ -3,6 +3,7 @@ import {
   applySignatureSchema,
   createSigningSessionSchema,
   createSignerFieldSchema,
+  completeSigningSchema,
   submitManifestSchema,
   uploadSignatureSchema,
 } from './signing.types';
@@ -230,6 +231,71 @@ export async function applySignature(req: Request, res: Response, next: NextFunc
     });
     res.json(result);
   } catch (err) {
+    next(err);
+  }
+}
+
+export async function completeSigning(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = completeSigningSchema.parse(req.body ?? {});
+    const documentId = getParam(req.params.docId);
+    if (!documentId) {
+      return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+    }
+    if (!req.signer) {
+      return res.status(401).json({ error: 'SIGNER_REQUIRED' });
+    }
+    const meta = {
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? undefined,
+      correlationId: req.correlationId,
+      clientMutationId: input.clientMutationId,
+    };
+    let signingSessionId = input.signingSessionId;
+    if (!signingSessionId) {
+      const session = await signingIntegrityService.createSigningSession({
+        documentId,
+        signerId: req.signer.id,
+        meta,
+      });
+      signingSessionId = session.signingSessionId;
+    }
+
+    await signingIntegrityService.submitManifest({
+      documentId,
+      signerId: req.signer.id,
+      signingSessionId,
+      fields: input.fields,
+      meta,
+    });
+
+    await signingIntegrityService.uploadSignatureArtifact({
+      documentId,
+      signerId: req.signer.id,
+      signingSessionId,
+      type: input.signature.type,
+      data: input.signature.data,
+      meta,
+    });
+
+    const applyResult = await signingIntegrityService.applySignature({
+      documentId,
+      signerId: req.signer.id,
+      signingSessionId,
+      meta,
+    });
+
+    res.status(201).json({ ...applyResult, signingSessionId });
+  } catch (err) {
+    const docId = getParam(req.params.docId);
+    if (docId && err instanceof Error) {
+      void emitSignatureRejected(
+        req,
+        docId,
+        (err as any).code ?? 'VALIDATION_FAILED',
+        err.message,
+      );
+    }
     next(err);
   }
 }

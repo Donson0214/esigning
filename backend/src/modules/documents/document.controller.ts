@@ -93,6 +93,27 @@ export async function getDocument(req: Request, res: Response, next: NextFunctio
   }
 }
 
+export async function deleteDocument(req: Request, res: Response, next: NextFunction) {
+  try {
+    const documentId = getParam(req.params.id);
+    if (!documentId) {
+      return res.status(400).json({ error: 'DOCUMENT_ID_REQUIRED' });
+    }
+    const result = await documentService.deleteDocument({
+      ownerId: req.user!.id,
+      documentId,
+      meta: {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? undefined,
+        correlationId: req.correlationId,
+      },
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getDocumentPreviewUrl(req: Request, res: Response, next: NextFunction) {
   try {
     const documentId = getParam(req.params.id);

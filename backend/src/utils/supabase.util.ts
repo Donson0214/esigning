@@ -66,3 +66,12 @@ export async function downloadStoredFile(pathOrUrl: string) {
   const arrayBuffer = await data.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
+
+export async function deleteStoredFile(pathOrUrl?: string | null) {
+  if (!pathOrUrl) return;
+  if (isRemoteUrl(pathOrUrl)) return;
+  const { error } = await supabase.storage.from(env.supabase.storageBucket).remove([pathOrUrl]);
+  if (error) {
+    throw createHttpError(502, 'STORAGE_DELETE_FAILED', error.message ?? 'Supabase delete failed');
+  }
+}

@@ -22,7 +22,7 @@
               </defs>
             </svg>
           </span>
-          <span v-if="!collapsed" class="brand-name">WilsonFlow</span>
+          <span v-if="!collapsed" class="brand-name">Inkless</span>
         </div>
         <button class="collapse" type="button" aria-label="Toggle sidebar" @click="$emit('toggle')">
           <svg v-if="collapsed" viewBox="0 0 24 24" aria-hidden="true">

@@ -58,6 +58,16 @@ export const useDocuments = () => {
       presence.value[event.docId] = Math.max(0, (presence.value[event.docId] ?? 1) - 1);
       return;
     }
+    if (event.event === 'doc.deleted') {
+      const docId = event.data.documentId;
+      documents.value = documents.value.filter((doc: Document) => doc.id !== docId);
+      if (docId) {
+        const nextPresence = { ...presence.value };
+        delete nextPresence[docId];
+        presence.value = nextPresence;
+      }
+      return;
+    }
     if (event.event === 'doc.updated' || event.event === 'doc.completed') {
       const summary = event.data.document;
       const current = documents.value.find((doc: Document) => doc.id === summary.id);

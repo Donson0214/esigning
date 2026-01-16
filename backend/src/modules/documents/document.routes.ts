@@ -5,6 +5,7 @@ import {
   createDocument,
   createField,
   deleteField,
+  deleteDocument,
   getAudit,
   getDocumentFile,
   getCertificate,
@@ -31,6 +32,7 @@ documentRoutes.get('/:id/preview-url', getDocumentPreviewUrl);
 documentRoutes.get('/:id/file', getDocumentFile);
 documentRoutes.post('/:id/signing-token', createSigningToken);
 documentRoutes.get('/:id', getDocument);
+documentRoutes.delete('/:id', deleteDocument);
 documentRoutes.get('/:id/audit', getAudit);
 documentRoutes.get('/:id/certificate', getCertificate);
 documentRoutes.post('/:id/send', sendDocument);

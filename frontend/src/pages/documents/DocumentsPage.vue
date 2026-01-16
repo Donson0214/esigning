@@ -76,6 +76,8 @@
     </section>
 
     <section class="table-card">
+      <p v-if="loading" class="status-text">Loading documents...</p>
+      <p v-else-if="error" class="error-text">{{ error }}</p>
       <div class="table-head">
         <span>Document</span>
         <span>Type</span>
@@ -98,6 +100,7 @@
             </span>
             <div>
               <p class="doc-title">{{ doc.title }}</p>
+              <p class="doc-name">{{ doc.fileName }}</p>
               <p class="doc-size">{{ doc.size }}</p>
             </div>
           </div>
@@ -105,7 +108,11 @@
           <div class="status-cell">
             <span :class="['status-pill', statusClass(doc.status)]">{{ doc.status }}</span>
           </div>
-          <div class="recipient-cell" :class="{ placeholder: doc.recipient === 'Not sent' }">
+          <div
+            class="recipient-cell"
+            :class="{ placeholder: doc.recipientCount === 0 }"
+            :title="doc.recipientFull"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="8" r="4" />
               <path d="M4 20a8 8 0 0 1 16 0" />
@@ -228,12 +235,16 @@
                 <p class="value">{{ selectedDoc.type }}</p>
               </div>
               <div>
-                <p class="label">Recipient</p>
-                <p class="value">{{ selectedDoc.recipient }}</p>
+                <p class="label">Recipients</p>
+                <p class="value">{{ selectedDoc.recipientFull }}</p>
               </div>
               <div>
                 <p class="label">Date</p>
                 <p class="value">{{ formatDate(selectedDoc.date) }}</p>
+              </div>
+              <div>
+                <p class="label">Document name</p>
+                <p class="value">{{ selectedDoc.fileName }}</p>
               </div>
               <div>
                 <p class="label">File size</p>
@@ -281,7 +292,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { deleteDocument } from '@/features/documents/api';
 import { useDocuments } from '@/features/documents/composables';
+import type { Document, Signer } from '@/features/documents/types';
 
 type DocumentStatus = 'Completed' | 'Pending' | 'Signed' | 'Viewed' | 'Expired' | 'Declined' | 'Draft';
 
@@ -292,6 +305,8 @@ type DocumentItem = {
   type: string;
   status: DocumentStatus;
   recipient: string;
+  recipientFull: string;
+  recipientCount: number;
   date: string;
   fileUrl: string;
   fileName: string;
@@ -302,19 +317,46 @@ const { documents, loading, error, refresh, presence } = useDocuments();
 
 const presenceCount = (docId: string) => presence.value[docId] ?? 0;
 
+const formatRecipients = (signers?: Signer[]) => {
+  if (!signers || signers.length === 0) {
+    return { short: 'Not sent', full: 'Not sent', count: 0 };
+  }
+  const labels = signers
+    .slice()
+    .sort((a, b) => a.signOrder - b.signOrder)
+    .map((signer) => signer.name?.trim() || signer.email)
+    .filter((label): label is string => Boolean(label && label.trim()));
+  if (labels.length === 0) {
+    return { short: 'Not sent', full: 'Not sent', count: 0 };
+  }
+  if (labels.length === 1) {
+    return { short: labels[0], full: labels[0], count: 1 };
+  }
+  return {
+    short: `${labels[0]} +${labels.length - 1}`,
+    full: labels.join(', '),
+    count: labels.length,
+  };
+};
+
 const documentRows = computed<DocumentItem[]>(() =>
-  documents.value.map((doc) => ({
-    id: doc.id,
-    title: doc.title,
-    size: `${(doc.fileSize / (1024 * 1024)).toFixed(1)} MB`,
-    type: 'PDF',
-    status: mapStatus(doc.status),
-    recipient: doc.signers?.[0]?.email ?? 'Not sent',
-    date: doc.updatedAt ?? doc.createdAt ?? new Date().toISOString(),
-    fileUrl: doc.fileUrl,
-    fileName: doc.fileName,
-    signedFileUrl: doc.signedFileUrl ?? null,
-  })),
+  documents.value.map((doc: Document) => {
+    const recipients = formatRecipients(doc.signers);
+    return {
+      id: doc.id,
+      title: doc.title,
+      size: `${(doc.fileSize / (1024 * 1024)).toFixed(1)} MB`,
+      type: 'PDF',
+      status: mapStatus(doc.status),
+      recipient: recipients.short,
+      recipientFull: recipients.full,
+      recipientCount: recipients.count,
+      date: doc.updatedAt ?? doc.createdAt ?? new Date().toISOString(),
+      fileUrl: doc.fileUrl,
+      fileName: doc.fileName,
+      signedFileUrl: doc.signedFileUrl ?? null,
+    };
+  }),
 );
 
 const statusOptions = [
@@ -355,7 +397,9 @@ const filteredDocuments = computed(() => {
   const search = searchQuery.value.toLowerCase();
   if (search) {
     result = result.filter((doc) =>
-      [doc.title, doc.type, doc.recipient].some((field) => field.toLowerCase().includes(search)),
+      [doc.title, doc.fileName, doc.type, doc.recipient, doc.recipientFull].some((field) =>
+        field.toLowerCase().includes(search),
+      ),
     );
   }
   if (statusFilter.value !== 'All Status') {
@@ -524,9 +568,15 @@ const downloadDocument = async (doc: DocumentItem) => {
   }
 };
 
-const removeDocument = (id: string) => {
-  documents.value = documents.value.filter((doc) => doc.id !== id);
+const removeDocument = async (id: string) => {
   menuOpenId.value = null;
+  error.value = null;
+  try {
+    await deleteDocument(id);
+    documents.value = documents.value.filter((doc) => doc.id !== id);
+  } catch {
+    error.value = 'Unable to delete the document.';
+  }
 };
 
 const createDocument = () => {
@@ -834,6 +884,13 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 
+.doc-name {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ink);
+  opacity: 0.75;
+}
+
 .type-cell {
   color: var(--ink);
   font-size: 0.9rem;
@@ -1002,6 +1059,20 @@ onBeforeUnmount(() => {
   padding: 1rem 1.5rem;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.status-text {
+  margin: 0;
+  padding: 0.9rem 1.5rem 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.error-text {
+  margin: 0;
+  padding: 0.9rem 1.5rem 0;
+  color: var(--danger);
+  font-size: 0.9rem;
 }
 
 .pagination {

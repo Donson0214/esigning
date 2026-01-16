@@ -12,8 +12,8 @@
 </template>
   
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { RouterView } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { RouterView, useRoute } from 'vue-router';
 import Sidebar from '@/shared/components/Sidebar.vue';
 import Topbar from '@/shared/components/Topbar.vue';
 import ToastStack from '@/shared/components/ToastStack.vue';
@@ -22,12 +22,18 @@ import { useNotifications } from '@/features/notifications/useNotifications';
 
 const sidebarCollapsed = ref(false);
 const mobileOpen = ref(false);
+const route = useRoute();
+const pageTitle = computed(() => {
+  const metaTitle = route.meta?.title;
+  if (typeof metaTitle === 'string' && metaTitle.trim()) return metaTitle;
+  if (typeof route.name === 'string' && route.name.trim()) return route.name;
+  return 'WilsonFlow';
+});
 
 const toggleCollapsed = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value;
 };
 
-const pageTitle = 'Wilson Platform';
 
 const { refresh } = useAuthProfile();
 const { initNotifications } = useNotifications();
